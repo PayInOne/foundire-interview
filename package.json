@@ -1,0 +1,28 @@
+{
+  "name": "foundire-interview",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.75.0",
+    "amqplib": "^0.10.9",
+    "dotenv": "^17.2.3",
+    "nodemailer": "^7.0.9",
+    "openai": "^6.3.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.8",
+    "@types/node": "^20",
+    "@types/nodemailer": "^7.0.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  }
+}
