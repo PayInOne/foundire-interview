@@ -2,6 +2,12 @@ export const DEFAULT_INTERVIEW_DURATION_MINUTES = 30
 export const MAX_INTERVIEW_DURATION_MINUTES = 180
 export const ALLOWED_INTERVIEW_DURATIONS_MINUTES = [15, 30, 45, 60] as const
 
+export const EXTEND_INTERVIEW_CONFIG = {
+  MINUTES_PER_EXTENSION: 15,
+  MAX_EXTENSION_COUNT: 4,
+  MAX_EXTENSION_TOTAL_MINUTES: 60,
+} as const
+
 export type AllowedInterviewDurationMinutes = (typeof ALLOWED_INTERVIEW_DURATIONS_MINUTES)[number]
 
 export function isAllowedInterviewDurationMinutes(value: unknown): value is AllowedInterviewDurationMinutes {

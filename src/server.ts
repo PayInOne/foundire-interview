@@ -13,6 +13,37 @@ import { handleGetConversationState, handleUpdateConversationState } from './int
 import { handleVerifyInterviewCode } from './interview-codes/verify'
 import { handleUseInterviewCode } from './interview-codes/use'
 import { handleCleanupStandardInterviews } from './interviews/cleanup'
+import { handleCleanupAllInterviews } from './interviews/cleanup-all'
+import { handleCreateCopilotInterview } from './copilot-interviews/create'
+import { handleScheduleCopilotInterview, handleGetCopilotSchedule } from './copilot-interviews/schedule'
+import { handleConfirmCopilotInterview, handleGetCopilotConfirmInfo } from './copilot-interviews/confirm'
+import { handleJoinCopilotInterview } from './copilot-interviews/join'
+import { handleGetCopilotInterviewStatus } from './copilot-interviews/status'
+import { handleCopilotInterviewHeartbeat } from './copilot-interviews/heartbeat'
+import { handleExtendCopilotInterview } from './copilot-interviews/extend'
+import { handleToggleCopilotAi } from './copilot-interviews/ai'
+import { handleAddCopilotParticipants, handleGetCopilotParticipants } from './copilot-interviews/participants'
+import { handleGenerateCopilotSuggestions, handleGetCopilotSuggestions } from './copilot-interviews/suggest'
+import { handlePostCopilotTranscript, handleGetCopilotTranscript } from './copilot-interviews/transcript'
+import { handleGetCopilotTranscriptCount } from './copilot-interviews/transcript-count'
+import { handleStartCopilotInterview } from './copilot-interviews/start'
+import { handleCompleteCopilotInterview } from './copilot-interviews/complete'
+import {
+  handleStartCopilotRecording,
+  handleStopCopilotRecording,
+  handleGetCopilotRecordingStatus,
+} from './copilot-interviews/recording'
+import { handleSendCopilotInvitationEmail } from './copilot-interviews/send-invitation'
+import { handleCancelCopilotInterview } from './copilot-interviews/cancel'
+import { handleScheduleCoseatInterview, handleGetActiveCoseatInterview } from './coseat/schedule'
+import { handleGetCoseatInterview } from './coseat/get'
+import { handleToggleCoseatAi } from './coseat/ai'
+import { handleCoseatHeartbeat } from './coseat/heartbeat'
+import { handlePostCoseatTranscript, handleGetCoseatTranscript } from './coseat/transcript'
+import { handleGetCoseatSuggestions, handleGenerateCoseatSuggestions } from './coseat/suggestions'
+import { handleStartCoseatSession, handleEndCoseatSession, handleUploadCoseatRecording } from './coseat/session'
+import { handleGetCoseatAudio } from './coseat/audio'
+import { handleGetCoseatProfile, handlePostCoseatProfile, handleDeleteCoseatProfile } from './coseat/profile'
 
 function isAuthorized(authHeader: string | null): boolean {
   const token = process.env.INTERNAL_API_TOKEN
@@ -22,6 +53,16 @@ function isAuthorized(authHeader: string | null): boolean {
 
 function sendJson(res: http.ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { 'content-type': 'application/json' })
+  res.end(JSON.stringify(body))
+}
+
+function sendJsonWithHeaders(
+  res: http.ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string>
+) {
+  res.writeHead(status, { 'content-type': 'application/json', ...headers })
   res.end(JSON.stringify(body))
 }
 
@@ -38,6 +79,21 @@ async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   } catch {
     return null
   }
+}
+
+async function readFormDataBody(req: http.IncomingMessage, url: URL): Promise<FormData | null> {
+  const contentType = req.headers['content-type'] || ''
+  if (typeof contentType !== 'string') return null
+  if (!contentType.includes('multipart/form-data')) return null
+
+  const request = new Request(url.toString(), {
+    method: req.method,
+    headers: req.headers as Record<string, string>,
+    body: req as unknown as any,
+    duplex: 'half',
+  })
+
+  return request.formData()
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -77,7 +133,8 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
   const server = http.createServer(async (req, res) => {
     try {
       const method = req.method || 'GET'
-      const { pathname } = new URL(req.url || '/', 'http://localhost')
+      const url = new URL(req.url || '/', 'http://localhost')
+      const pathname = url.pathname
       const segments = pathname.split('/').filter(Boolean)
 
       if (method === 'GET' && pathname === '/health') {
@@ -119,6 +176,12 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
 
       if (method === 'POST' && pathname === '/internal/interviews/cleanup') {
         const response = await handleCleanupStandardInterviews()
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/cleanup-all') {
+        const response = await handleCleanupAllInterviews()
         sendJson(res, response.status, response.body)
         return
       }
@@ -292,11 +355,356 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
         return
       }
 
+      if (method === 'POST' && pathname === '/internal/copilot-interviews/create') {
+        const body = await readJsonBody(req)
+        const response = await handleCreateCopilotInterview(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/coseat/schedule') {
+        const body = await readJsonBody(req)
+        const response = await handleScheduleCoseatInterview(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/coseat/schedule') {
+        const candidateId = url.searchParams.get('candidateId') || ''
+        const userId = url.searchParams.get('userId') || ''
+        const response = await handleGetActiveCoseatInterview(candidateId, userId)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/coseat/profile') {
+        const userId = url.searchParams.get('userId') || ''
+        const companyId = url.searchParams.get('companyId') || ''
+        const response = await handleGetCoseatProfile(userId, companyId)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/coseat/profile') {
+        const formData = await readFormDataBody(req, url)
+        if (!formData) {
+          sendJson(res, 400, { success: false, error: 'Invalid form data' })
+          return
+        }
+
+        const userId = String(formData.get('userId') || '')
+        const companyId = String(formData.get('companyId') || '')
+        const language = String(formData.get('language') || 'en-US')
+        const voicePrintFeaturesStr = formData.get('voicePrintFeatures')
+        const audioFile = formData.get('audio') as File | null
+
+        if (!audioFile) {
+          sendJson(res, 400, { success: false, error: 'No audio file provided' })
+          return
+        }
+
+        const response = await handlePostCoseatProfile({
+          userId,
+          companyId,
+          audioFile,
+          language,
+          voicePrintFeaturesStr: typeof voicePrintFeaturesStr === 'string' ? voicePrintFeaturesStr : null,
+        })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'DELETE' && pathname === '/internal/coseat/profile') {
+        const body = await readJsonBody(req)
+        const record = asRecord(body) ?? {}
+        const userId = typeof record.userId === 'string' ? record.userId : ''
+        const companyId = typeof record.companyId === 'string' ? record.companyId : ''
+        const response = await handleDeleteCoseatProfile(userId, companyId)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/copilot-interviews/schedule') {
+        const body = await readJsonBody(req)
+        const response = await handleScheduleCopilotInterview(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/copilot-interviews/schedule') {
+        const candidateId = url.searchParams.get('candidateId') || ''
+        const includeAll = url.searchParams.get('include_all') === 'true'
+        const response = await handleGetCopilotSchedule(candidateId, includeAll)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
       if (segments.length === 3 && segments[0] === 'internal' && segments[1] === 'interviews' && method === 'GET') {
         const interviewId = segments[2]
         const response = await handleGetInterview(interviewId)
         sendJson(res, response.status, response.body)
         return
+      }
+
+      if (
+        segments.length === 4 &&
+        segments[0] === 'internal' &&
+        segments[1] === 'copilot-interviews' &&
+        segments[2] === 'confirm' &&
+        method === 'GET'
+      ) {
+        const token = segments[3]
+        const response = await handleGetCopilotConfirmInfo(token)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (
+        segments.length === 4 &&
+        segments[0] === 'internal' &&
+        segments[1] === 'copilot-interviews' &&
+        segments[2] === 'confirm' &&
+        method === 'POST'
+      ) {
+        const token = segments[3]
+        const response = await handleConfirmCopilotInterview(token)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (segments.length >= 3 && segments[0] === 'internal' && segments[1] === 'copilot-interviews') {
+        const copilotInterviewId = segments[2]
+
+        if (segments.length === 4 && segments[3] === 'join' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleJoinCopilotInterview(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'status' && method === 'GET') {
+          const response = await handleGetCopilotInterviewStatus(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'heartbeat' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleCopilotInterviewHeartbeat(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'extend' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleExtendCopilotInterview(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'ai' && method === 'PATCH') {
+          const body = await readJsonBody(req)
+          const response = await handleToggleCopilotAi(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'participants' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleAddCopilotParticipants(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'participants' && method === 'GET') {
+          const userId = url.searchParams.get('userId') || ''
+          const response = await handleGetCopilotParticipants(copilotInterviewId, userId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'suggest' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleGenerateCopilotSuggestions(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'suggest' && method === 'GET') {
+          const response = await handleGetCopilotSuggestions(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'transcript' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handlePostCopilotTranscript(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'transcript' && method === 'GET') {
+          const userId = url.searchParams.get('userId') || ''
+          const response = await handleGetCopilotTranscript(copilotInterviewId, userId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'transcript-count' && method === 'GET') {
+          const response = await handleGetCopilotTranscriptCount(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'start' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleStartCopilotInterview(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'complete' && method === 'POST') {
+          const response = await handleCompleteCopilotInterview(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 5 && segments[3] === 'recording' && segments[4] === 'start' && method === 'POST') {
+          const response = await handleStartCopilotRecording(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 5 && segments[3] === 'recording' && segments[4] === 'stop' && method === 'POST') {
+          const response = await handleStopCopilotRecording(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 5 && segments[3] === 'recording' && segments[4] === 'status' && method === 'GET') {
+          const response = await handleGetCopilotRecordingStatus(copilotInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'send-invitation' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleSendCopilotInvitationEmail(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'cancel' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleCancelCopilotInterview(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+      }
+
+      if (method === 'POST' && pathname === '/internal/coseat/session/start') {
+        const body = await readJsonBody(req)
+        const response = await handleStartCoseatSession(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/coseat/session/end') {
+        const body = await readJsonBody(req)
+        const response = await handleEndCoseatSession(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/coseat/session/upload-recording') {
+        const formData = await readFormDataBody(req, url)
+        if (!formData) {
+          sendJson(res, 400, { success: false, error: 'Invalid form data' })
+          return
+        }
+
+        const userId = String(formData.get('userId') || '')
+        const coseatInterviewId = String(formData.get('coseatInterviewId') || '')
+        const durationSeconds = formData.get('durationSeconds')
+        const audioFile = formData.get('audio') as File | null
+
+        if (!audioFile || !coseatInterviewId) {
+          sendJson(res, 400, { success: false, error: 'audio and coseatInterviewId are required' })
+          return
+        }
+
+        const response = await handleUploadCoseatRecording({
+          userId,
+          coseatInterviewId,
+          durationSeconds: typeof durationSeconds === 'string' ? durationSeconds : undefined,
+          audioFile,
+        })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (segments.length >= 3 && segments[0] === 'internal' && segments[1] === 'coseat') {
+        const coseatInterviewId = segments[2]
+
+        if (segments.length === 3 && method === 'GET') {
+          const userId = url.searchParams.get('userId') || ''
+          const response = await handleGetCoseatInterview(coseatInterviewId, userId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'ai' && method === 'PATCH') {
+          const body = await readJsonBody(req)
+          const response = await handleToggleCoseatAi(coseatInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'heartbeat' && method === 'POST') {
+          const response = await handleCoseatHeartbeat(coseatInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'transcript' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handlePostCoseatTranscript(coseatInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'transcript' && method === 'GET') {
+          const userId = url.searchParams.get('userId') || ''
+          const response = await handleGetCoseatTranscript(coseatInterviewId, userId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'suggestions' && method === 'GET') {
+          const response = await handleGetCoseatSuggestions(coseatInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'suggestions' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleGenerateCoseatSuggestions(coseatInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'audio' && method === 'GET') {
+          const userId = url.searchParams.get('userId') || ''
+          const result = await handleGetCoseatAudio(coseatInterviewId, userId)
+          if (result.status === 200) {
+            res.writeHead(result.status, result.headers)
+            result.stream.pipe(res)
+            return
+          }
+
+          sendJsonWithHeaders(res, result.status, result.body, result.headers)
+          return
+        }
       }
 
       if (
