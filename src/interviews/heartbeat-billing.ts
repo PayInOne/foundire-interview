@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deductCredits } from '../credits/manager'
-import { deleteRoom } from '../livekit/server'
+import { deleteRoomForRegion } from '../livekit/rooms'
 
 export interface HeartbeatBillingParams {
   interviewId: string
@@ -185,7 +185,7 @@ export async function handleInterviewAutoEnd({
 
   if (livekitRoomName) {
     try {
-      await deleteRoom(livekitRoomName)
+      await deleteRoomForRegion(livekitRoomName, 'self-hosted')
     } catch (error) {
       console.error(`❌ Failed to delete LiveKit room ${livekitRoomName}:`, error)
     }
@@ -254,4 +254,3 @@ export async function processHeartbeatBillingWithAutoEnd({
 
   return { ...billingResult, autoEnded: false }
 }
-

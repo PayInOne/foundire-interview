@@ -1,7 +1,7 @@
 import { createAdminClient } from '../supabase/admin'
 import { toJson } from '../supabase/json'
 import { deductCredits } from '../credits/manager'
-import { deleteRoom } from '../livekit/server'
+import { deleteRoomForRegion } from '../livekit/rooms'
 
 export type CleanupStandardInterviewsResponse =
   | { status: 200; body: Record<string, unknown> }
@@ -120,7 +120,7 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
         let roomDeleted = false
         if (interview.livekit_room_name) {
           try {
-            roomDeleted = await deleteRoom(interview.livekit_room_name)
+            roomDeleted = await deleteRoomForRegion(interview.livekit_room_name, 'self-hosted')
           } catch (roomError) {
             console.error(`Failed to delete room for interview ${interview.id}:`, roomError)
           }
@@ -160,4 +160,3 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
     return { status: 500, body: { error: message } }
   }
 }
-

@@ -1,6 +1,7 @@
 import { EgressStatus } from 'livekit-server-sdk'
 import { createAdminClient } from '../supabase/admin'
-import { buildLiveKitS3Output, getLiveKitEgressClient, getLiveKitRecordingKey, getLiveKitRoomName } from '../livekit/server'
+import { getEgressClientForRegion } from '../livekit/geo-routing'
+import { buildLiveKitS3Output, getLiveKitRecordingKey, getLiveKitRoomName } from '../livekit/server'
 
 export type LiveKitStartResponse =
   | { status: 200; body: { success: true; egressId: string; alreadyStarted?: boolean } }
@@ -42,10 +43,21 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
     await admin.from('interviews').update({ livekit_room_name: roomName }).eq('id', interviewId)
   }
 
-  const egressClient = getLiveKitEgressClient()
+  const egressClient = getEgressClientForRegion('self-hosted')
   const fileOutput = buildLiveKitS3Output(interviewId)
 
-  const egressInfo = await egressClient.startTrackCompositeEgress(roomName, fileOutput, audioTrackSid, videoTrackSid)
+  let egressInfo: Awaited<ReturnType<typeof egressClient.startTrackCompositeEgress>>
+  try {
+    egressInfo = await egressClient.startTrackCompositeEgress(roomName, fileOutput, audioTrackSid, videoTrackSid)
+  } catch (error) {
+    const err = error as { status?: number; code?: string; message?: string }
+    if (err?.status === 404 || err?.code === 'not_found') {
+      return { status: 404, body: { error: 'LiveKit room does not exist' } }
+    }
+
+    console.error('Error starting LiveKit egress:', err)
+    return { status: 500, body: { error: 'Failed to start LiveKit recording' } }
+  }
 
   if (egressInfo.status === EgressStatus.EGRESS_FAILED) {
     console.error('LiveKit egress failed to start', {
@@ -100,7 +112,7 @@ export async function handleLiveKitStop(body: unknown): Promise<LiveKitStopRespo
     return { status: 200, body: { success: true, stopped: false } }
   }
 
-  const egressClient = getLiveKitEgressClient()
+  const egressClient = getEgressClientForRegion('self-hosted')
   try {
     await egressClient.stopEgress(existing.livekit_egress_id)
   } catch (error) {
@@ -115,4 +127,3 @@ export async function handleLiveKitStop(body: unknown): Promise<LiveKitStopRespo
 
   return { status: 200, body: { success: true, stopped: true } }
 }
-
