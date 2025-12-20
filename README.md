@@ -28,4 +28,19 @@
   - `POST /internal/interviews/livekit/start`
   - `POST /internal/interviews/livekit/stop`
   - `POST /internal/interviews/cleanup`
+  - `POST /internal/livekit/token`
+  - `POST /internal/livekit/webhook`
+  - `GET /internal/azure-speech/token`
+  - `POST /internal/azure-speech/token`
+  - `POST /internal/azure-speech/recognize`
+  - `POST /internal/azure-tts`
+  - `POST /internal/liveavatar/create-custom-session`
+  - `POST /internal/liveavatar/keep-alive`
+  - `POST /internal/liveavatar/end-session`
+  - `GET /internal/digital-human/config`
+  - `GET /internal/did/agent`
+  - `POST /internal/did/stream`
+  - `DELETE /internal/did/stream`
+  - `POST /internal/did/sdp`
+  - `POST /internal/did/talk`
 - Worker: 检测到 `RABBITMQ_URL` 后自动启动 consumer

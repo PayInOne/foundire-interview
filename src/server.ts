@@ -35,6 +35,8 @@ import {
 } from './copilot-interviews/recording'
 import { handleSendCopilotInvitationEmail } from './copilot-interviews/send-invitation'
 import { handleCancelCopilotInterview } from './copilot-interviews/cancel'
+import { handleCreateLiveKitToken } from './livekit/standard-token'
+import { handleLiveKitWebhook } from './livekit/webhook'
 import { handleScheduleCoseatInterview, handleGetActiveCoseatInterview } from './coseat/schedule'
 import { handleGetCoseatInterview } from './coseat/get'
 import { handleToggleCoseatAi } from './coseat/ai'
@@ -44,6 +46,20 @@ import { handleGetCoseatSuggestions, handleGenerateCoseatSuggestions } from './c
 import { handleStartCoseatSession, handleEndCoseatSession, handleUploadCoseatRecording } from './coseat/session'
 import { handleGetCoseatAudio } from './coseat/audio'
 import { handleGetCoseatProfile, handlePostCoseatProfile, handleDeleteCoseatProfile } from './coseat/profile'
+import { handleAzureSpeechToken } from './azure/speech-token'
+import { handleAzureTts } from './azure/tts'
+import { handleAzureSpeechRecognize } from './azure/speech-recognize'
+import { handleCreateLiveAvatarCustomSession } from './liveavatar/create-custom-session'
+import { handleLiveAvatarKeepAlive } from './liveavatar/keep-alive'
+import { handleLiveAvatarEndSession } from './liveavatar/end-session'
+import { handleDigitalHumanConfig } from './digital-human/config'
+import {
+  handleCreateDidStream,
+  handleDeleteDidStream,
+  handleDidSdp,
+  handleDidTalk,
+  handleGetDidAgent,
+} from './did/handlers'
 
 function isAuthorized(authHeader: string | null): boolean {
   const token = process.env.INTERNAL_API_TOKEN
@@ -79,6 +95,15 @@ async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   } catch {
     return null
   }
+}
+
+async function readTextBody(req: http.IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 async function readFormDataBody(req: http.IncomingMessage, url: URL): Promise<FormData | null> {
@@ -351,6 +376,148 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
       if (method === 'POST' && pathname === '/internal/interviews/livekit/stop') {
         const body = await readJsonBody(req)
         const response = await handleLiveKitStop(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/livekit/token') {
+        const body = await readJsonBody(req)
+        const response = await handleCreateLiveKitToken(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/livekit/webhook') {
+        const rawBody = await readTextBody(req)
+        const forwardedAuthHeader = req.headers['x-livekit-authorization']
+        const forwardedAuth =
+          typeof forwardedAuthHeader === 'string'
+            ? forwardedAuthHeader
+            : Array.isArray(forwardedAuthHeader)
+              ? forwardedAuthHeader[0] || ''
+              : ''
+
+        const response = await handleLiveKitWebhook({ rawBody, authorization: forwardedAuth })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/livekit/webhook') {
+        sendJson(res, 200, { status: 'LiveKit webhook endpoint active (Custom Mode)' })
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/azure-speech/token') {
+        const userId = url.searchParams.get('userId') || undefined
+        const candidateId = url.searchParams.get('candidateId') || undefined
+        const copilotInterviewId = url.searchParams.get('copilotInterviewId') || undefined
+
+        const response = await handleAzureSpeechToken({ userId, candidateId, copilotInterviewId })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/azure-speech/token') {
+        const body = await readJsonBody(req)
+        const response = await handleAzureSpeechToken(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/azure-speech/recognize') {
+        const formData = await readFormDataBody(req, url)
+        if (!formData) {
+          sendJson(res, 400, { error: 'Invalid form data' })
+          return
+        }
+
+        const audioFile = formData.get('audio') as File | null
+        const locale = typeof formData.get('locale') === 'string' ? (formData.get('locale') as string) : undefined
+
+        if (!audioFile) {
+          sendJson(res, 400, { error: 'No audio file provided' })
+          return
+        }
+
+        const response = await handleAzureSpeechRecognize({ audioFile, locale })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/azure-tts') {
+        const body = await readJsonBody(req)
+        const response = await handleAzureTts(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/liveavatar/create-custom-session') {
+        const body = await readJsonBody(req)
+        const response = await handleCreateLiveAvatarCustomSession(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/liveavatar/keep-alive') {
+        const body = await readJsonBody(req)
+        const response = await handleLiveAvatarKeepAlive(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/liveavatar/end-session') {
+        const body = await readJsonBody(req)
+        const response = await handleLiveAvatarEndSession(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/digital-human/config') {
+        const language = url.searchParams.get('language') || undefined
+        const interviewId = url.searchParams.get('interviewId') || undefined
+        const candidateName = url.searchParams.get('candidateName') || undefined
+        const interviewMode = url.searchParams.get('interviewMode') || undefined
+
+        const response = await handleDigitalHumanConfig({
+          language,
+          interviewId,
+          candidateName,
+          interviewMode,
+        })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'GET' && pathname === '/internal/did/agent') {
+        const response = await handleGetDidAgent()
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/did/stream') {
+        const body = await readJsonBody(req)
+        const response = await handleCreateDidStream(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'DELETE' && pathname === '/internal/did/stream') {
+        const sessionId = url.searchParams.get('sessionId') || ''
+        const response = await handleDeleteDidStream({ sessionId })
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/did/sdp') {
+        const body = await readJsonBody(req)
+        const response = await handleDidSdp(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/did/talk') {
+        const body = await readJsonBody(req)
+        const response = await handleDidTalk(body)
         sendJson(res, response.status, response.body)
         return
       }
