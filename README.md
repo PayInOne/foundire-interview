@@ -12,9 +12,20 @@
 
 - HTTP: `GET /health`
 - Internal: 所有 `/internal/*` 均需要 `Authorization: Bearer $INTERNAL_API_TOKEN`
+  - `POST /internal/interview-codes/verify`
+  - `POST /internal/interview-codes/use`
+  - `POST /internal/interviews/create`
+  - `GET /internal/interviews/:id`
+  - `GET /internal/interviews/:id/state`
+  - `PUT /internal/interviews/:id/state`
   - `POST /internal/interviews/analyze`（入队 `interview_analyze`）
   - `POST /internal/interviews/questions`
   - `POST /internal/interviews/conversation`
   - `POST /internal/interviews/analyze-message`
   - `POST /internal/interviews/evaluate-topic`
+  - `POST /internal/interviews/heartbeat`
+  - `POST /internal/interviews/transcript`
+  - `POST /internal/interviews/livekit/start`
+  - `POST /internal/interviews/livekit/stop`
+  - `POST /internal/interviews/cleanup`
 - Worker: 检测到 `RABBITMQ_URL` 后自动启动 consumer

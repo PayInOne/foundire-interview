@@ -4,6 +4,15 @@ import { generateQuestionsForInterview } from './interviews/questions'
 import { handleConversation } from './interviews/conversation'
 import { analyzeCandidateMessage } from './openai/analyze-message'
 import { evaluateTopicPerformance } from './openai/topic-evaluation'
+import { handleInterviewHeartbeat } from './interviews/heartbeat'
+import { handleSaveTranscript } from './interviews/transcript'
+import { handleLiveKitStart, handleLiveKitStop } from './interviews/livekit-recording'
+import { handleCreateInterview } from './interviews/create'
+import { handleGetInterview } from './interviews/get'
+import { handleGetConversationState, handleUpdateConversationState } from './interviews/state'
+import { handleVerifyInterviewCode } from './interview-codes/verify'
+import { handleUseInterviewCode } from './interview-codes/use'
+import { handleCleanupStandardInterviews } from './interviews/cleanup'
 
 function isAuthorized(authHeader: string | null): boolean {
   const token = process.env.INTERNAL_API_TOKEN
@@ -69,6 +78,7 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
     try {
       const method = req.method || 'GET'
       const { pathname } = new URL(req.url || '/', 'http://localhost')
+      const segments = pathname.split('/').filter(Boolean)
 
       if (method === 'GET' && pathname === '/health') {
         sendJson(res, 200, { ok: true })
@@ -98,6 +108,33 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
 
       if (pathname.startsWith('/internal/')) {
         if (!requireInternalAuth(req, res)) return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/create') {
+        const body = await readJsonBody(req)
+        const response = await handleCreateInterview(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/cleanup') {
+        const response = await handleCleanupStandardInterviews()
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interview-codes/verify') {
+        const body = await readJsonBody(req)
+        const response = await handleVerifyInterviewCode(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interview-codes/use') {
+        const body = await readJsonBody(req)
+        const response = await handleUseInterviewCode(body)
+        sendJson(res, response.status, response.body)
+        return
       }
 
       if (method === 'POST' && pathname === '/internal/interviews/questions') {
@@ -221,6 +258,73 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
         })
 
         sendJson(res, 200, { success: true, evaluation })
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/heartbeat') {
+        const body = await readJsonBody(req)
+        const record = asRecord(body)
+        const interviewId = typeof record?.interviewId === 'string' ? record.interviewId : ''
+
+        const response = await handleInterviewHeartbeat(interviewId)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/transcript') {
+        const body = await readJsonBody(req)
+        const response = await handleSaveTranscript(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/livekit/start') {
+        const body = await readJsonBody(req)
+        const response = await handleLiveKitStart(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/interviews/livekit/stop') {
+        const body = await readJsonBody(req)
+        const response = await handleLiveKitStop(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (segments.length === 3 && segments[0] === 'internal' && segments[1] === 'interviews' && method === 'GET') {
+        const interviewId = segments[2]
+        const response = await handleGetInterview(interviewId)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (
+        segments.length === 4 &&
+        segments[0] === 'internal' &&
+        segments[1] === 'interviews' &&
+        segments[3] === 'state' &&
+        method === 'GET'
+      ) {
+        const interviewId = segments[2]
+        const response = await handleGetConversationState(interviewId)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (
+        segments.length === 4 &&
+        segments[0] === 'internal' &&
+        segments[1] === 'interviews' &&
+        segments[3] === 'state' &&
+        method === 'PUT'
+      ) {
+        const interviewId = segments[2]
+        const body = await readJsonBody(req)
+        const record = asRecord(body)
+        const conversation_state = record?.conversation_state
+        const response = await handleUpdateConversationState(interviewId, conversation_state)
+        sendJson(res, response.status, response.body)
         return
       }
 
