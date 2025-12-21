@@ -3,7 +3,7 @@ import { startCopilotInterview } from './manager'
 import { asRecord, getString } from '../utils/parse'
 
 export type CopilotStartResponse =
-  | { status: 200; body: { success: true; data: unknown } }
+  | { status: 200; body: { success: true; data: unknown; startedAt: string | null } }
   | { status: 400 | 401 | 403 | 404 | 500; body: { error: string } }
 
 export async function handleStartCopilotInterview(copilotInterviewId: string, body: unknown): Promise<CopilotStartResponse> {
@@ -42,10 +42,9 @@ export async function handleStartCopilotInterview(copilotInterviewId: string, bo
       return { status: 400, body: { error: result.error || 'Failed to start interview' } }
     }
 
-    return { status: 200, body: { success: true, data: result.data } }
+    return { status: 200, body: { success: true, data: result.data, startedAt: result.startedAt ?? null } }
   } catch (error) {
     console.error('Error starting copilot interview:', error)
     return { status: 500, body: { error: 'Internal server error' } }
   }
 }
-

@@ -426,7 +426,7 @@ export async function updateParticipantHeartbeat(
 export async function startCopilotInterview(
   copilotInterviewId: string,
   supabaseClient?: SupabaseClient
-): Promise<{ success: boolean; data?: CopilotInterviewState; error?: string }> {
+): Promise<{ success: boolean; data?: CopilotInterviewState; startedAt?: string; error?: string }> {
   const supabase = supabaseClient || createAdminClient()
 
   try {
@@ -452,24 +452,58 @@ export async function startCopilotInterview(
       .eq('id', (data as { interview_id: string }).interview_id)
       .single()
 
-    const { data: interviewData } = await supabase
-      .from('interviews')
-      .update({
-        status: 'in-progress',
-        ...(currentInterview && (currentInterview as { started_at?: string | null }).started_at ? {} : { started_at: new Date().toISOString() }),
-      })
-      .eq('id', (data as { interview_id: string }).interview_id)
-      .select('candidate_id')
-      .single()
+    const interviewId = (data as { interview_id: string }).interview_id
+    const existingStartedAt = (currentInterview as { started_at?: string | null } | null)?.started_at ?? null
+    const startedAt = existingStartedAt ?? new Date().toISOString()
+    let finalStartedAt = startedAt
 
-    if (interviewData && (interviewData as { candidate_id?: string | null }).candidate_id) {
+    await supabase
+      .from('interviews')
+      .update({ status: 'in-progress' })
+      .eq('id', interviewId)
+
+    if (!existingStartedAt) {
+      const { data: updatedRows, error: startedAtError } = await supabase
+        .from('interviews')
+        .update({ started_at: startedAt })
+        .eq('id', interviewId)
+        .is('started_at', null)
+        .select('started_at')
+
+      if (startedAtError) {
+        console.warn('[Copilot] Failed to persist interviews.started_at:', startedAtError)
+      } else if (Array.isArray(updatedRows) && updatedRows.length > 0) {
+        const updatedStartedAt = (updatedRows[0] as { started_at?: string | null } | null)?.started_at ?? null
+        if (updatedStartedAt) {
+          finalStartedAt = updatedStartedAt
+        }
+      } else {
+        const { data: reloaded, error: reloadError } = await supabase
+          .from('interviews')
+          .select('started_at')
+          .eq('id', interviewId)
+          .single()
+
+        if (reloadError) {
+          console.warn('[Copilot] Failed to reload interviews.started_at:', reloadError)
+        } else {
+          const reloadedStartedAt = (reloaded as { started_at?: string | null } | null)?.started_at ?? null
+          if (reloadedStartedAt) {
+            finalStartedAt = reloadedStartedAt
+          }
+        }
+      }
+    }
+
+    const candidateId = (currentInterview as { candidate_id?: string | null } | null)?.candidate_id ?? null
+    if (candidateId) {
       await supabase
         .from('candidates')
         .update({ status: 'interviewing' })
-        .eq('id', (interviewData as { candidate_id: string }).candidate_id)
+        .eq('id', candidateId)
     }
 
-    return { success: true, data: data as CopilotInterviewState }
+    return { success: true, data: data as CopilotInterviewState, startedAt: finalStartedAt }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
