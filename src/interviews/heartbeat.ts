@@ -1,4 +1,5 @@
 import { createAdminClient } from '../supabase/admin'
+import type { LiveKitRegion } from '../livekit/geo-routing'
 import { normalizeInterviewDurationMinutes } from './constants'
 import { processHeartbeatBillingWithAutoEnd } from './heartbeat-billing'
 
@@ -13,11 +14,24 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
 
   const supabase = createAdminClient()
 
-  const { data: interview, error: fetchError } = await supabase
+  let interview: unknown = null
+  let fetchError: { code?: string } | null = null
+
+  ;({ data: interview, error: fetchError } = await supabase
     .from('interviews')
-    .select('started_at, company_id, candidate_id, credits_deducted, status, interview_duration, livekit_room_name')
+    .select(
+      'started_at, company_id, candidate_id, credits_deducted, status, interview_duration, livekit_room_name, livekit_region'
+    )
     .eq('id', interviewId)
-    .single()
+    .single())
+
+  if (fetchError?.code === '42703') {
+    ;({ data: interview, error: fetchError } = await supabase
+      .from('interviews')
+      .select('started_at, company_id, candidate_id, credits_deducted, status, interview_duration, livekit_room_name')
+      .eq('id', interviewId)
+      .single())
+  }
 
   if (fetchError || !interview) {
     return { status: 404, body: { error: 'Interview not found or not active' } }
@@ -31,6 +45,7 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
     status: string | null
     interview_duration: unknown
     livekit_room_name: string | null
+    livekit_region?: unknown
   }
 
   if (record.status !== 'in-progress' && record.status !== 'paused') {
@@ -59,6 +74,7 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
     candidateId: record.candidate_id ?? undefined,
     interviewDurationMinutes,
     livekitRoomName: record.livekit_room_name ?? undefined,
+    livekitRegion: (record.livekit_region as LiveKitRegion | null) ?? null,
   })
 
   if (billingResult.autoEnded) {
@@ -101,4 +117,3 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
     },
   }
 }
-

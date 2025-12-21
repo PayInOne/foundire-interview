@@ -1,4 +1,4 @@
-import { getLiveKitConfigForRegion } from '../livekit/geo-routing'
+import { getLiveKitConfigForRegionWithFallback } from '../livekit/geo-routing'
 import { createLiveKitAccessToken } from '../livekit/tokens'
 import { asRecord, getOptionalString, getString } from '../utils/parse'
 
@@ -27,7 +27,7 @@ export async function handleCreateLiveAvatarCustomSession(body: unknown): Promis
 
     const effectiveContextId = process.env.HEYGEN_CONTEXT_ID
 
-    const livekitConfig = getLiveKitConfigForRegion('self-hosted')
+    const livekitConfig = getLiveKitConfigForRegionWithFallback('self-hosted')
 
     const roomName = `avatar-session-${interviewId}-${Date.now()}`
     const wsUrl = livekitConfig.wsUrl
@@ -125,4 +125,3 @@ export async function handleCreateLiveAvatarCustomSession(body: unknown): Promis
     return { status: 500, body: { error: message } }
   }
 }
-

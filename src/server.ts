@@ -382,7 +382,10 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
 
       if (method === 'POST' && pathname === '/internal/livekit/token') {
         const body = await readJsonBody(req)
-        const response = await handleCreateLiveKitToken(body)
+        const response = await handleCreateLiveKitToken({
+          body,
+          headers: req.headers as Record<string, string | string[] | undefined>,
+        })
         sendJson(res, response.status, response.body)
         return
       }

@@ -42,10 +42,26 @@ export function getRegionFromCountry(countryCode: string | null): LiveKitRegion 
 }
 
 function getSelfHostedConfig(): LiveKitConfig | null {
-  const apiUrl = process.env.LIVEKIT_API_URL
-  const wsUrl = process.env.LIVEKIT_WS_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL
+  const envApiUrl = process.env.LIVEKIT_API_URL
+  const envWsUrl = process.env.LIVEKIT_WS_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL
   const apiKey = process.env.LIVEKIT_API_KEY
   const apiSecret = process.env.LIVEKIT_API_SECRET
+
+  const wsUrl =
+    envWsUrl ||
+    (envApiUrl
+      ? envApiUrl
+          .replace(/^https:\/\//, 'wss://')
+          .replace(/^http:\/\//, 'ws://')
+      : undefined)
+
+  const apiUrl =
+    envApiUrl ||
+    (wsUrl
+      ? wsUrl
+          .replace(/^wss:\/\//, 'https://')
+          .replace(/^ws:\/\//, 'http://')
+      : undefined)
 
   if (!apiUrl || !wsUrl || !apiKey || !apiSecret) {
     return null
@@ -71,15 +87,16 @@ function getCloudConfig(): LiveKitConfig | null {
 }
 
 export function getLiveKitConfigForRegion(region: LiveKitRegion): LiveKitConfig {
-  if (region === 'self-hosted') {
-    const config = getSelfHostedConfig()
-    if (config) return config
+  const config = region === 'self-hosted' ? getSelfHostedConfig() : getCloudConfig()
+  if (!config) {
+    throw new Error(`LiveKit configuration for region ${region} is not available`)
   }
+  return config
+}
 
-  if (region === 'cloud') {
-    const config = getCloudConfig()
-    if (config) return config
-  }
+export function getLiveKitConfigForRegionWithFallback(region: LiveKitRegion): LiveKitConfig {
+  const config = region === 'self-hosted' ? getSelfHostedConfig() : getCloudConfig()
+  if (config) return config
 
   const fallback = getSelfHostedConfig() || getCloudConfig()
   if (!fallback) {
@@ -136,11 +153,11 @@ export async function selectRegionWithFallback(preferredRegion: LiveKitRegion): 
 }
 
 export function getRoomServiceClientForRegion(region: LiveKitRegion | null): RoomServiceClient {
-  const config = getLiveKitConfigForRegion(region || 'self-hosted')
+  const config = region ? getLiveKitConfigForRegion(region) : getLiveKitConfigForRegionWithFallback('self-hosted')
   return new RoomServiceClient(config.apiUrl, config.apiKey, config.apiSecret)
 }
 
 export function getEgressClientForRegion(region: LiveKitRegion | null): EgressClient {
-  const config = getLiveKitConfigForRegion(region || 'self-hosted')
+  const config = region ? getLiveKitConfigForRegion(region) : getLiveKitConfigForRegionWithFallback('self-hosted')
   return new EgressClient(config.apiUrl, config.apiKey, config.apiSecret)
 }

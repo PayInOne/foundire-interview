@@ -1,6 +1,7 @@
 import { createAdminClient } from '../supabase/admin'
 import { normalizeInterviewDurationMinutes } from '../interviews/constants'
 import { processHeartbeatBillingWithAutoEnd } from '../interviews/heartbeat-billing'
+import type { LiveKitRegion } from '../livekit/geo-routing'
 import { updateParticipantHeartbeat } from './manager'
 import { asRecord, getOptionalString } from '../utils/parse'
 
@@ -113,6 +114,7 @@ export async function handleCopilotInterviewHeartbeat(
       statusFieldName: 'room_status',
       interviewDurationMinutes,
       livekitRoomName: copilot.livekit_room_name ?? undefined,
+      livekitRegion: (copilot.livekit_region as LiveKitRegion | null) ?? null,
     })
 
     if (billingResult.autoEnded) {
@@ -172,4 +174,3 @@ export async function handleCopilotInterviewHeartbeat(
     }
   }
 }
-

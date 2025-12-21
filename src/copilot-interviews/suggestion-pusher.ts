@@ -1,6 +1,5 @@
-import { DataPacket_Kind, RoomServiceClient } from 'livekit-server-sdk'
-import type { LiveKitRegion } from '../livekit/geo-routing'
-import { getLiveKitConfigForRegion } from '../livekit/geo-routing'
+import { DataPacket_Kind } from 'livekit-server-sdk'
+import { getRoomServiceClientForRegion, type LiveKitRegion } from '../livekit/geo-routing'
 import type { AISuggestion } from '../interview/ai-assisted/suggestion-adapter'
 
 interface SuggestionMessage {
@@ -15,8 +14,7 @@ export async function broadcastSuggestionsToInterviewers(params: {
   region: LiveKitRegion | null
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const livekitConfig = getLiveKitConfigForRegion(params.region || 'self-hosted')
-    const roomService = new RoomServiceClient(livekitConfig.apiUrl, livekitConfig.apiKey, livekitConfig.apiSecret)
+    const roomService = getRoomServiceClientForRegion(params.region)
 
     const participants = await roomService.listParticipants(params.roomName)
     const interviewerIdentities = participants
@@ -46,4 +44,3 @@ export async function broadcastSuggestionsToInterviewers(params: {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
-

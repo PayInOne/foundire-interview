@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deductCredits } from '../credits/manager'
 import { deleteRoomForRegion } from '../livekit/rooms'
+import type { LiveKitRegion } from '../livekit/geo-routing'
 
 export interface HeartbeatBillingParams {
   interviewId: string
@@ -28,6 +29,7 @@ export interface HeartbeatBillingWithAutoEndParams extends HeartbeatBillingParam
   statusFieldName?: string
   interviewDurationMinutes?: number
   livekitRoomName?: string
+  livekitRegion?: LiveKitRegion | null
 }
 
 export interface HeartbeatBillingWithAutoEndResult extends HeartbeatBillingResult {
@@ -149,6 +151,7 @@ export async function handleInterviewAutoEnd({
   supabase,
   reason,
   livekitRoomName,
+  livekitRegion,
 }: {
   interviewId: string
   extendedTableName?: string
@@ -158,6 +161,7 @@ export async function handleInterviewAutoEnd({
   supabase: SupabaseClient
   reason: 'credits_exhausted' | 'duration_exceeded'
   livekitRoomName?: string
+  livekitRegion?: LiveKitRegion | null
 }): Promise<{ autoEnded: boolean }> {
   const now = new Date()
 
@@ -185,7 +189,16 @@ export async function handleInterviewAutoEnd({
 
   if (livekitRoomName) {
     try {
-      await deleteRoomForRegion(livekitRoomName, 'self-hosted')
+      const region = livekitRegion === 'self-hosted' || livekitRegion === 'cloud' ? livekitRegion : null
+
+      if (region) {
+        await deleteRoomForRegion(livekitRoomName, region)
+      } else {
+        const deletedSelfHosted = await deleteRoomForRegion(livekitRoomName, 'self-hosted')
+        if (!deletedSelfHosted) {
+          await deleteRoomForRegion(livekitRoomName, 'cloud')
+        }
+      }
     } catch (error) {
       console.error(`❌ Failed to delete LiveKit room ${livekitRoomName}:`, error)
     }
@@ -208,6 +221,7 @@ export async function processHeartbeatBillingWithAutoEnd({
   statusFieldName,
   interviewDurationMinutes,
   livekitRoomName,
+  livekitRegion,
 }: HeartbeatBillingWithAutoEndParams): Promise<HeartbeatBillingWithAutoEndResult> {
   const billingResult = await processHeartbeatBilling({
     interviewId,
@@ -231,6 +245,7 @@ export async function processHeartbeatBillingWithAutoEnd({
         supabase,
         reason: 'duration_exceeded',
         livekitRoomName,
+        livekitRegion,
       })
 
       return { ...billingResult, autoEnded: true, autoEndReason: 'duration_exceeded' }
@@ -247,6 +262,7 @@ export async function processHeartbeatBillingWithAutoEnd({
       supabase,
       reason: 'credits_exhausted',
       livekitRoomName,
+      livekitRegion,
     })
 
     return { ...billingResult, autoEnded: true, autoEndReason: 'credits_exhausted' }

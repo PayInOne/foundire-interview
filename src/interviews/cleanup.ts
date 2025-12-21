@@ -2,10 +2,15 @@ import { createAdminClient } from '../supabase/admin'
 import { toJson } from '../supabase/json'
 import { deductCredits } from '../credits/manager'
 import { deleteRoomForRegion } from '../livekit/rooms'
+import type { LiveKitRegion } from '../livekit/geo-routing'
 
 export type CleanupStandardInterviewsResponse =
   | { status: 200; body: Record<string, unknown> }
   | { status: 500; body: { error: string } }
+
+function parseRegion(value: unknown): LiveKitRegion | null {
+  return value === 'self-hosted' || value === 'cloud' ? value : null
+}
 
 type InterviewRow = {
   id: string
@@ -15,6 +20,7 @@ type InterviewRow = {
   last_active_at: string | null
   credits_deducted: number | null
   livekit_room_name: string | null
+  livekit_region?: unknown
 }
 
 export async function handleCleanupStandardInterviews(): Promise<CleanupStandardInterviewsResponse> {
@@ -22,11 +28,24 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
     const supabase = createAdminClient()
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
 
-    const { data: abandonedInterviews, error: fetchError } = await supabase
+    let abandonedInterviews: unknown = null
+    let fetchError: { code?: string } | null = null
+
+    ;({ data: abandonedInterviews, error: fetchError } = await supabase
       .from('interviews')
-      .select('id, company_id, candidate_id, started_at, last_active_at, credits_deducted, livekit_room_name')
+      .select(
+        'id, company_id, candidate_id, started_at, last_active_at, credits_deducted, livekit_room_name, livekit_region'
+      )
       .eq('status', 'in-progress')
-      .or(`last_active_at.lt.${fiveMinutesAgo},last_active_at.is.null`)
+      .or(`last_active_at.lt.${fiveMinutesAgo},last_active_at.is.null`))
+
+    if (fetchError?.code === '42703') {
+      ;({ data: abandonedInterviews, error: fetchError } = await supabase
+        .from('interviews')
+        .select('id, company_id, candidate_id, started_at, last_active_at, credits_deducted, livekit_room_name')
+        .eq('status', 'in-progress')
+        .or(`last_active_at.lt.${fiveMinutesAgo},last_active_at.is.null`))
+    }
 
     if (fetchError) {
       console.error('Error fetching abandoned interviews:', fetchError)
@@ -120,7 +139,15 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
         let roomDeleted = false
         if (interview.livekit_room_name) {
           try {
-            roomDeleted = await deleteRoomForRegion(interview.livekit_room_name, 'self-hosted')
+            const region = parseRegion(interview.livekit_region)
+            if (region) {
+              roomDeleted = await deleteRoomForRegion(interview.livekit_room_name, region)
+            } else {
+              roomDeleted = await deleteRoomForRegion(interview.livekit_room_name, 'self-hosted')
+              if (!roomDeleted) {
+                roomDeleted = await deleteRoomForRegion(interview.livekit_room_name, 'cloud')
+              }
+            }
           } catch (roomError) {
             console.error(`Failed to delete room for interview ${interview.id}:`, roomError)
           }

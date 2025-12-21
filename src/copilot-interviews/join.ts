@@ -27,6 +27,10 @@ function parseRole(value: unknown): JoinRole | null {
   return value === 'interviewer' || value === 'candidate' ? value : null
 }
 
+function parseRegion(value: unknown): LiveKitRegion | null {
+  return value === 'self-hosted' || value === 'cloud' ? value : null
+}
+
 export async function handleJoinCopilotInterview(
   copilotInterviewId: string,
   body: unknown
@@ -123,10 +127,32 @@ export async function handleJoinCopilotInterview(
       livekitConfig = result.config
       usedFallback = result.usedFallback
 
-      await adminSupabase
+      const { data: updatedRows, error: regionError } = await adminSupabase
         .from('copilot_interviews')
         .update({ livekit_region: result.actualRegion })
         .eq('id', copilotInterviewId)
+        .is('livekit_region', null)
+        .select('livekit_region')
+
+      if (regionError) {
+        console.warn('Failed to persist copilot_interviews.livekit_region, continuing:', regionError)
+      } else if (Array.isArray(updatedRows) && updatedRows.length === 0) {
+        const { data: current, error: currentError } = await adminSupabase
+          .from('copilot_interviews')
+          .select('livekit_region')
+          .eq('id', copilotInterviewId)
+          .single()
+
+        if (currentError) {
+          console.warn('Failed to reload copilot_interviews.livekit_region, continuing:', currentError)
+        } else {
+          const lockedRegion = parseRegion((current as { livekit_region?: unknown } | null)?.livekit_region)
+          if (lockedRegion) {
+            livekitConfig = getLiveKitConfigForRegion(lockedRegion)
+            usedFallback = lockedRegion !== preferredRegion
+          }
+        }
+      }
     }
 
     if (copilotInterview.livekit_room_name) {
@@ -209,4 +235,3 @@ export async function handleJoinCopilotInterview(
     }
   }
 }
-

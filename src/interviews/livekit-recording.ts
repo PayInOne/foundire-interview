@@ -1,11 +1,20 @@
 import { EgressStatus } from 'livekit-server-sdk'
 import { createAdminClient } from '../supabase/admin'
-import { getEgressClientForRegion } from '../livekit/geo-routing'
+import { getEgressClientForRegion, getFallbackRegion, type LiveKitRegion } from '../livekit/geo-routing'
 import { buildLiveKitS3Output, getLiveKitRecordingKey, getLiveKitRoomName } from '../livekit/server'
 
 export type LiveKitStartResponse =
   | { status: 200; body: { success: true; egressId: string; alreadyStarted?: boolean } }
   | { status: 400 | 404 | 500; body: { error: string } }
+
+function parseRegion(value: unknown): LiveKitRegion | null {
+  return value === 'self-hosted' || value === 'cloud' ? value : null
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const err = error as { status?: number; code?: string }
+  return err?.status === 404 || err?.code === 'not_found'
+}
 
 export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartResponse> {
   const record = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null
@@ -19,11 +28,24 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
 
   const admin = createAdminClient()
 
-  const { data: interview, error } = await admin
+  let interview: unknown = null
+  let error: { code?: string } | null = null
+  let supportsLivekitRegion = true
+
+  ;({ data: interview, error } = await admin
     .from('interviews')
-    .select('id, livekit_room_name, livekit_egress_id')
+    .select('id, livekit_room_name, livekit_egress_id, livekit_region')
     .eq('id', interviewId)
-    .single()
+    .single())
+
+  if (error?.code === '42703') {
+    supportsLivekitRegion = false
+    ;({ data: interview, error } = await admin
+      .from('interviews')
+      .select('id, livekit_room_name, livekit_egress_id')
+      .eq('id', interviewId)
+      .single())
+  }
 
   if (error || !interview) {
     return { status: 404, body: { error: 'Interview not found' } }
@@ -32,6 +54,7 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
   const existing = interview as unknown as {
     livekit_room_name: string | null
     livekit_egress_id: string | null
+    livekit_region?: unknown
   }
 
   if (existing.livekit_egress_id) {
@@ -43,19 +66,49 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
     await admin.from('interviews').update({ livekit_room_name: roomName }).eq('id', interviewId)
   }
 
-  const egressClient = getEgressClientForRegion('self-hosted')
   const fileOutput = buildLiveKitS3Output(interviewId)
 
-  let egressInfo: Awaited<ReturnType<typeof egressClient.startTrackCompositeEgress>>
-  try {
-    egressInfo = await egressClient.startTrackCompositeEgress(roomName, fileOutput, audioTrackSid, videoTrackSid)
-  } catch (error) {
-    const err = error as { status?: number; code?: string; message?: string }
-    if (err?.status === 404 || err?.code === 'not_found') {
+  const storedRegion = parseRegion(existing.livekit_region)
+  const regionsToTry: LiveKitRegion[] = storedRegion ? [storedRegion] : ['self-hosted', 'cloud']
+  let lastError: unknown = null
+  let egressInfo: Awaited<ReturnType<ReturnType<typeof getEgressClientForRegion>['startTrackCompositeEgress']>> | null =
+    null
+  let usedRegion: LiveKitRegion | null = null
+
+  for (const region of regionsToTry) {
+    let egressClient
+    try {
+      egressClient = getEgressClientForRegion(region)
+    } catch (error) {
+      lastError = error
+      continue
+    }
+
+    try {
+      egressInfo = await egressClient.startTrackCompositeEgress(roomName, fileOutput, audioTrackSid, videoTrackSid)
+      usedRegion = region
+      break
+    } catch (error) {
+      lastError = error
+      if (isNotFoundError(error) && !storedRegion) {
+        continue
+      }
+
+      if (isNotFoundError(error)) {
+        return { status: 404, body: { error: 'LiveKit room does not exist' } }
+      }
+
+      console.error('Error starting LiveKit egress:', error)
+      return { status: 500, body: { error: 'Failed to start LiveKit recording' } }
+    }
+  }
+
+  if (!egressInfo || !usedRegion) {
+    if (isNotFoundError(lastError)) {
       return { status: 404, body: { error: 'LiveKit room does not exist' } }
     }
 
-    console.error('Error starting LiveKit egress:', err)
+    console.error('Error starting LiveKit egress (no region succeeded):', lastError)
     return { status: 500, body: { error: 'Failed to start LiveKit recording' } }
   }
 
@@ -71,12 +124,18 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
 
   const recordingKey = getLiveKitRecordingKey(interviewId)
 
+  const updatePayload: Record<string, unknown> = {
+    livekit_egress_id: egressInfo.egressId,
+    video_url: recordingKey,
+  }
+
+  if (supportsLivekitRegion && !storedRegion) {
+    updatePayload.livekit_region = usedRegion
+  }
+
   await admin
     .from('interviews')
-    .update({
-      livekit_egress_id: egressInfo.egressId,
-      video_url: recordingKey,
-    })
+    .update(updatePayload)
     .eq('id', interviewId)
 
   return { status: 200, body: { success: true, egressId: egressInfo.egressId } }
@@ -96,31 +155,74 @@ export async function handleLiveKitStop(body: unknown): Promise<LiveKitStopRespo
 
   const admin = createAdminClient()
 
-  const { data: interview, error } = await admin
+  let interview: unknown = null
+  let error: { code?: string } | null = null
+
+  ;({ data: interview, error } = await admin
     .from('interviews')
-    .select('id, livekit_egress_id')
+    .select('id, livekit_egress_id, livekit_region')
     .eq('id', interviewId)
-    .single()
+    .single())
+
+  if (error?.code === '42703') {
+    ;({ data: interview, error } = await admin
+      .from('interviews')
+      .select('id, livekit_egress_id')
+      .eq('id', interviewId)
+      .single())
+  }
 
   if (error || !interview) {
     return { status: 404, body: { error: 'Interview not found' } }
   }
 
-  const existing = interview as unknown as { livekit_egress_id: string | null }
+  const existing = interview as unknown as { livekit_egress_id: string | null; livekit_region?: unknown }
 
   if (!existing.livekit_egress_id) {
     return { status: 200, body: { success: true, stopped: false } }
   }
 
-  const egressClient = getEgressClientForRegion('self-hosted')
-  try {
-    await egressClient.stopEgress(existing.livekit_egress_id)
-  } catch (error) {
-    const err = error as { code?: string; status?: number; message?: string }
-    if (err?.code !== 'failed_precondition' && err?.status !== 412) {
-      console.error('Error stopping LiveKit egress:', err)
+  const storedRegion = parseRegion(existing.livekit_region)
+  const regionsToTry: LiveKitRegion[] = storedRegion
+    ? [storedRegion, getFallbackRegion(storedRegion)]
+    : ['self-hosted', 'cloud']
+
+  let stopSucceeded = false
+  let lastError: unknown = null
+
+  for (const region of regionsToTry) {
+    let egressClient
+    try {
+      egressClient = getEgressClientForRegion(region)
+    } catch (error) {
+      lastError = error
+      continue
+    }
+
+    try {
+      await egressClient.stopEgress(existing.livekit_egress_id)
+      stopSucceeded = true
+      break
+    } catch (error) {
+      const err = error as { code?: string; status?: number }
+      if (err?.code === 'failed_precondition' || err?.status === 412) {
+        stopSucceeded = true
+        break
+      }
+
+      if (isNotFoundError(error)) {
+        lastError = error
+        continue
+      }
+
+      console.error('Error stopping LiveKit egress:', error)
       return { status: 500, body: { error: 'Failed to stop LiveKit recording' } }
     }
+  }
+
+  if (!stopSucceeded) {
+    console.error('Error stopping LiveKit egress (no region succeeded):', lastError)
+    return { status: 500, body: { error: 'Failed to stop LiveKit recording' } }
   }
 
   await admin.from('interviews').update({ livekit_egress_id: null }).eq('id', interviewId)
