@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { getAppPublicUrl } from '../config'
 import { sendInterviewerInvitationEmail } from '../email'
 import { INTERVIEW_MODES } from '../interview/modes'
@@ -7,7 +8,15 @@ import {
   normalizeInterviewDurationMinutes,
 } from '../interviews/constants'
 import { createAdminClient } from '../supabase/admin'
-import { asRecord, getOptionalString, getString } from '../utils/parse'
+import { asRecord, getString } from '../utils/parse'
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function generateConfirmationToken(): string {
+  return randomBytes(32).toString('hex')
+}
 
 type CopilotInterviewBase = {
   id: string
@@ -52,7 +61,10 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
 
     const interviewerIdsValue = record.interviewerIds
     const interviewerIds = Array.isArray(interviewerIdsValue)
-      ? interviewerIdsValue.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      ? interviewerIdsValue
+          .filter((v): v is string => typeof v === 'string')
+          .map((v) => v.trim())
+          .filter((v) => v.length > 0 && isUuid(v))
       : null
 
     const interviewDurationRaw = record.interviewDuration
@@ -63,6 +75,15 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
 
     if (!userId) {
       return { status: 401, body: { success: false, error: 'Unauthorized' } }
+    }
+
+    if (!isUuid(candidateId) || !isUuid(jobId)) {
+      return { status: 400, body: { success: false, error: 'Invalid candidateId or jobId' } }
+    }
+
+    if (!isUuid(userId)) {
+      console.warn('[Copilot Schedule] Invalid userId:', userId)
+      return { status: 400, body: { success: false, error: 'Invalid userId' } }
     }
 
     if (interviewerIds && interviewerIds.length > 2) {
@@ -159,42 +180,58 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
       return { status: 500, body: { success: false, error: 'Failed to create interview record' } }
     }
 
-    const { data: tokenData, error: tokenError } = await adminSupabase.rpc('generate_confirmation_token')
-    if (tokenError || !tokenData) {
-      await adminSupabase.from('interviews').delete().eq('id', (interview as { id: string }).id)
-      return { status: 500, body: { success: false, error: 'Failed to generate confirmation token' } }
-    }
-
-    const confirmationToken = tokenData as string
+    const interviewId = (interview as { id: string }).id
+    let confirmationToken = generateConfirmationToken()
 
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 
-    const roomName = `ai-interview-${(interview as { id: string }).id}`
+    const roomName = `ai-interview-${interviewId}`
 
-    const { data: copilotInterview, error: copilotInterviewError } = await adminSupabase
-      .from('copilot_interviews')
-      .insert({
-        interview_id: (interview as { id: string }).id,
-        interviewer_id: userId,
-        candidate_id: candidateId,
-        job_id: jobId,
-        company_id: companyId,
-        room_status: 'waiting_both',
-        scheduled_at: scheduledTime.toISOString(),
-        invitation_expires_at: expiresAt.toISOString(),
-        confirmation_token: confirmationToken,
-        interviewer_email: user.email,
-        candidate_email: candidateEmail,
-        livekit_room_name: roomName,
-        ai_enabled: true,
-      })
-      .select()
-      .single()
+    let copilotInterview: unknown | null = null
+    let copilotInterviewError: unknown | null = null
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const tokenForAttempt = attempt === 0 ? confirmationToken : generateConfirmationToken()
+
+      const { data, error } = await adminSupabase
+        .from('copilot_interviews')
+        .insert({
+          interview_id: interviewId,
+          interviewer_id: userId,
+          candidate_id: candidateId,
+          job_id: jobId,
+          company_id: companyId,
+          room_status: 'waiting_both',
+          scheduled_at: scheduledTime.toISOString(),
+          invitation_expires_at: expiresAt.toISOString(),
+          confirmation_token: tokenForAttempt,
+          interviewer_email: user.email,
+          candidate_email: candidateEmail,
+          livekit_room_name: roomName,
+          ai_enabled: true,
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        copilotInterview = data
+        copilotInterviewError = null
+        confirmationToken = tokenForAttempt
+        break
+      }
+
+      copilotInterviewError = error
+
+      const errorCode = (error as { code?: string } | null)?.code
+      if (errorCode !== '23505') {
+        break
+      }
+    }
 
     if (copilotInterviewError || !copilotInterview) {
       console.error('AI interview insert error:', copilotInterviewError)
-      await adminSupabase.from('interviews').delete().eq('id', (interview as { id: string }).id)
+      await adminSupabase.from('interviews').delete().eq('id', interviewId)
       return { status: 500, body: { success: false, error: 'Failed to create AI interview record' } }
     }
 
@@ -289,7 +326,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
         success: true,
         data: {
           copilotInterviewId: (copilotInterview as { id: string }).id,
-          interviewId: (interview as { id: string }).id,
+          interviewId,
           confirmationToken,
           confirmationUrl,
           interviewerUrl,
