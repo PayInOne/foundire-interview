@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { enqueueInterviewAnalyzeTask } from './workers/interview-analyze'
+import { createAdminClient } from './supabase/admin'
 import { generateQuestionsForInterview } from './interviews/questions'
 import { handleConversation } from './interviews/conversation'
 import { analyzeCandidateMessage } from './openai/analyze-message'
@@ -139,6 +140,64 @@ function parseAnalyzeBody(value: unknown): { interviewId: string; locale: string
   return { interviewId, locale, sendEmail }
 }
 
+async function markInterviewCompletedBeforeAnalyze(interviewId: string): Promise<void> {
+  try {
+    const supabase = createAdminClient()
+    const now = new Date().toISOString()
+
+    const { data: interview, error } = await supabase
+      .from('interviews')
+      .select('status, completed_at, candidate_id')
+      .eq('id', interviewId)
+      .maybeSingle()
+
+    if (error) {
+      console.warn('[Analyze] Failed to fetch interview status before enqueue:', error)
+      return
+    }
+
+    if (!interview) {
+      return
+    }
+
+    const record = interview as { status?: string | null; completed_at?: string | null; candidate_id?: string | null }
+    const status = record.status || null
+    const completedAt = record.completed_at || null
+    const candidateId = record.candidate_id || null
+
+    const shouldMarkCompleted = status === 'in-progress' || status === 'paused' || status === null
+    const shouldSetCompletedAt = !completedAt
+
+    if (shouldMarkCompleted || shouldSetCompletedAt) {
+      const update: Record<string, unknown> = {}
+      if (shouldMarkCompleted) update.status = 'completed'
+      if (shouldSetCompletedAt) update.completed_at = now
+
+      const { error: updateError } = await supabase
+        .from('interviews')
+        .update(update)
+        .eq('id', interviewId)
+
+      if (updateError) {
+        console.warn('[Analyze] Failed to mark interview completed before enqueue:', updateError)
+      }
+    }
+
+    if (candidateId && (shouldMarkCompleted || status === 'completed')) {
+      const { error: candidateError } = await supabase
+        .from('candidates')
+        .update({ status: 'completed' })
+        .eq('id', candidateId)
+
+      if (candidateError) {
+        console.warn('[Analyze] Failed to mark candidate completed before enqueue:', candidateError)
+      }
+    }
+  } catch (error) {
+    console.warn('[Analyze] Unexpected error marking interview completed before enqueue:', error)
+  }
+}
+
 function requireInternalAuth(req: http.IncomingMessage, res: http.ServerResponse): boolean {
   const token = process.env.INTERNAL_API_TOKEN
   if (!token) {
@@ -182,6 +241,7 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
           return
         }
 
+        await markInterviewCompletedBeforeAnalyze(parsed.interviewId)
         await enqueueInterviewAnalyzeTask(parsed)
 
         sendJson(res, 200, { success: true, mode: 'queued', interviewId: parsed.interviewId })

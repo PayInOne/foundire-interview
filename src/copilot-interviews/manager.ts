@@ -301,7 +301,7 @@ export async function interviewerJoinRoom(
       const newStatus = calculateNewRoomStatusMulti(
         (current as { room_status: RoomStatus }).room_status,
         Boolean((current as { candidate_joined_at: string | null }).candidate_joined_at),
-        (joinedCount || 0) + ((participant as { joined_at?: string | null } | null)?.joined_at ? 0 : 1),
+        joinedCount || 0,
         (current as { min_interviewers_required?: number | null }).min_interviewers_required || 1
       )
 
@@ -532,4 +532,3 @@ export async function completeCopilotInterview(
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
-

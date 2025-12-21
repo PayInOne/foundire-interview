@@ -2,6 +2,7 @@ import { createAdminClient } from '../supabase/admin'
 import { normalizeInterviewDurationMinutes } from '../interviews/constants'
 import { processHeartbeatBillingWithAutoEnd } from '../interviews/heartbeat-billing'
 import type { LiveKitRegion } from '../livekit/geo-routing'
+import { enqueueInterviewAnalyzeTask } from '../workers/interview-analyze'
 import { updateParticipantHeartbeat } from './manager'
 import { asRecord, getOptionalString } from '../utils/parse'
 
@@ -24,7 +25,7 @@ export async function handleCopilotInterviewHeartbeat(
     const { data: copilotInterview, error: fetchCopilotError } = await supabase
       .from('copilot_interviews')
       .select(
-        'interview_id, company_id, room_status, candidate_id, livekit_egress_id, livekit_room_name, created_at, updated_at, livekit_region'
+        'interview_id, company_id, room_status, candidate_id, interviewer_id, livekit_egress_id, livekit_room_name, created_at, updated_at, livekit_region'
       )
       .eq('id', copilotInterviewId)
       .single()
@@ -38,6 +39,7 @@ export async function handleCopilotInterviewHeartbeat(
       company_id: string
       room_status: string
       candidate_id: string
+      interviewer_id: string | null
       livekit_egress_id: string | null
       livekit_room_name: string | null
       created_at: string | null
@@ -122,6 +124,23 @@ export async function handleCopilotInterviewHeartbeat(
         billingResult.autoEndReason === 'duration_exceeded'
           ? 'Interview ended automatically due to duration limit exceeded'
           : 'Interview ended automatically due to insufficient credits'
+
+      if (process.env.RABBITMQ_URL) {
+        try {
+          let locale = 'en'
+
+          const interviewerId = copilot.interviewer_id
+          if (interviewerId) {
+            const { data } = await supabase.auth.admin.getUserById(interviewerId)
+            const interviewer = data?.user
+            locale = (interviewer?.user_metadata?.locale as string | undefined) || 'en'
+          }
+
+          await enqueueInterviewAnalyzeTask({ interviewId: copilot.interview_id, locale, sendEmail: true })
+        } catch (error) {
+          console.warn('[Copilot Heartbeat] Failed to enqueue interview analysis after auto-end:', error)
+        }
+      }
 
       return {
         status: 200,

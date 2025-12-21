@@ -107,16 +107,27 @@ export function getLiveKitConfigForRegionWithFallback(region: LiveKitRegion): Li
   return fallback
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timeoutId: NodeJS.Timeout | null = null
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('timeout')), ms)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
 export async function healthCheckLiveKit(config: LiveKitConfig): Promise<boolean> {
-  const timeout = setTimeout(() => undefined, 5000)
   try {
     const client = new RoomServiceClient(config.apiUrl, config.apiKey, config.apiSecret)
-    await client.listRooms([])
+    await withTimeout(client.listRooms([]), 5000)
     return true
   } catch {
     return false
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
