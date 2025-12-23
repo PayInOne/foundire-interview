@@ -163,7 +163,7 @@ export async function handleEndCoseatSession(body: unknown): Promise<CoseatSessi
 
     const { data: coseatInterview, error: fetchError } = await adminSupabase
       .from('coseat_interviews')
-      .select('id, interviewer_id, session_status, interview_id')
+      .select('id, interviewer_id, session_status, interview_id, candidate_id')
       .eq('id', coseatInterviewId)
       .single()
 
@@ -171,7 +171,7 @@ export async function handleEndCoseatSession(body: unknown): Promise<CoseatSessi
       return { status: 404, body: { success: false, error: 'CoSeat interview not found' } }
     }
 
-    const meta = coseatInterview as { interviewer_id: string; session_status: string | null; interview_id: string }
+    const meta = coseatInterview as { interviewer_id: string; session_status: string | null; interview_id: string; candidate_id: string }
 
     if (meta.interviewer_id !== userId) {
       return { status: 403, body: { success: false, error: 'Only the interviewer can end this session' } }
@@ -197,6 +197,14 @@ export async function handleEndCoseatSession(body: unknown): Promise<CoseatSessi
       .from('interviews')
       .update({ status: 'completed', completed_at: now })
       .eq('id', meta.interview_id)
+
+    // Update candidate status to completed
+    if (meta.candidate_id) {
+      await adminSupabase
+        .from('candidates')
+        .update({ status: 'completed' })
+        .eq('id', meta.candidate_id)
+    }
 
     if (process.env.RABBITMQ_URL) {
       let locale = 'en'
