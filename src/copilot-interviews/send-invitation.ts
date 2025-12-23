@@ -170,24 +170,24 @@ export async function handleSendCopilotInvitationEmail(
 
     const introByMode: Record<typeof locale, Record<SchedulingMode, string>> = {
       zh: {
-        instant: `我们想邀请你参加 <strong>${job.title}</strong> 的真人视频面试（AI 辅助）。`,
-        scheduled: `你已被安排参加 <strong>${job.title}</strong> 的真人视频面试（AI 辅助）。请确认参加。`,
-        candidate_choice: `你已受邀参加 <strong>${job.title}</strong> 的真人视频面试（AI 辅助）。请从以下时间段中选择适合的时间。`,
+        instant: `我们想邀请你参加 <strong>${job.title}</strong> 的真人视频面试。`,
+        scheduled: `你已被安排参加 <strong>${job.title}</strong> 的真人视频面试。请确认参加。`,
+        candidate_choice: `你已受邀参加 <strong>${job.title}</strong> 的真人视频面试。请从以下时间段中选择适合的时间。`,
       },
       en: {
-        instant: `We'd like to invite you to a live video interview for <strong>${job.title}</strong> (AI-assisted).`,
-        scheduled: `You are scheduled for a live video interview for <strong>${job.title}</strong> (AI-assisted). Please confirm your attendance.`,
-        candidate_choice: `You've been invited to a live video interview for <strong>${job.title}</strong> (AI-assisted). Please choose a time slot below.`,
+        instant: `We'd like to invite you to a live video interview for <strong>${job.title}</strong>.`,
+        scheduled: `You are scheduled for a live video interview for <strong>${job.title}</strong>. Please confirm your attendance.`,
+        candidate_choice: `You've been invited to a live video interview for <strong>${job.title}</strong>. Please choose a time slot below.`,
       },
       es: {
-        instant: `Nos gustaría invitarte a una entrevista en video en vivo para <strong>${job.title}</strong> (asistida por IA).`,
-        scheduled: `Tienes programada una entrevista en video en vivo para <strong>${job.title}</strong> (asistida por IA). Por favor confirma tu asistencia.`,
-        candidate_choice: `Has sido invitado a una entrevista en video en vivo para <strong>${job.title}</strong> (asistida por IA). Por favor selecciona un horario abajo.`,
+        instant: `Nos gustaría invitarte a una entrevista en video en vivo para <strong>${job.title}</strong>.`,
+        scheduled: `Tienes programada una entrevista en video en vivo para <strong>${job.title}</strong>. Por favor confirma tu asistencia.`,
+        candidate_choice: `Has sido invitado a una entrevista en video en vivo para <strong>${job.title}</strong>. Por favor selecciona un horario abajo.`,
       },
       fr: {
-        instant: `Nous aimerions vous inviter à un entretien vidéo en direct pour <strong>${job.title}</strong> (assisté par IA).`,
-        scheduled: `Vous êtes planifié pour un entretien vidéo en direct pour <strong>${job.title}</strong> (assisté par IA). Merci de confirmer votre participation.`,
-        candidate_choice: `Vous êtes invité à un entretien vidéo en direct pour <strong>${job.title}</strong> (assisté par IA). Merci de choisir un créneau ci-dessous.`,
+        instant: `Nous aimerions vous inviter à un entretien vidéo en direct pour <strong>${job.title}</strong>.`,
+        scheduled: `Vous êtes planifié pour un entretien vidéo en direct pour <strong>${job.title}</strong>. Merci de confirmer votre participation.`,
+        candidate_choice: `Vous êtes invité à un entretien vidéo en direct pour <strong>${job.title}</strong>. Merci de choisir un créneau ci-dessous.`,
       },
     }
 
