@@ -268,7 +268,7 @@ export async function cleanupWaitingRoomCopilotInterviews(): Promise<CleanupCopi
 
   const { data: waitingRoomInterviews, error } = await adminSupabase
     .from('copilot_interviews')
-    .select('id, interview_id, candidate_id, livekit_room_name, livekit_region, room_status, updated_at, created_at')
+    .select('id, interview_id, candidate_id, livekit_room_name, livekit_region, room_status, updated_at, created_at, scheduled_at, scheduling_mode')
     .in('room_status', waitingStatuses)
 
   if (error) {
@@ -285,11 +285,26 @@ export async function cleanupWaitingRoomCopilotInterviews(): Promise<CleanupCopi
     room_status: string | null
     updated_at: string | null
     created_at: string | null
+    scheduled_at: string | null
+    scheduling_mode: string | null
   }>
 
   for (const waiting of rows) {
     try {
       const now = new Date()
+
+      // 对于有预约时间的面试，跳过还未到时间窗口的
+      // handleCheckMissedInterviews 会处理已过期的预约面试
+      if (waiting.scheduled_at && (waiting.scheduling_mode === 'scheduled' || waiting.scheduling_mode === 'candidate_choice')) {
+        const scheduledAt = new Date(waiting.scheduled_at)
+        const windowEnd = new Date(scheduledAt.getTime() + 15 * 60 * 1000) // 预约时间后15分钟
+
+        // 如果还没到预约时间窗口结束，不要清理（让 handleCheckMissedInterviews 处理）
+        if (now < windowEnd) {
+          continue
+        }
+      }
+
       const lastUpdate = waiting.updated_at
         ? new Date(waiting.updated_at)
         : waiting.created_at
