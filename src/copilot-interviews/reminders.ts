@@ -9,6 +9,7 @@ interface InterviewData {
   id: string
   scheduled_at: string
   candidate_timezone?: string | null
+  candidate_email?: string | null
   candidates: { name?: string | null; email?: string | null } | null
   companies: { name?: string | null } | null
   jobs: { title?: string | null } | null
@@ -292,8 +293,9 @@ async function sendReminderEmail(
   const candidate = interview.candidates
   const company = interview.companies
   const job = interview.jobs
+  const recipientEmail = interview.candidate_email || candidate?.email || null
 
-  if (!candidate?.email || !company?.name || !job?.title || !interview.scheduled_at) {
+  if (!recipientEmail || !company?.name || !job?.title || !interview.scheduled_at) {
     console.error(`[Reminder] Missing data for interview ${interview.id}`)
     return false
   }
@@ -316,7 +318,7 @@ async function sendReminderEmail(
   const duration = interview.interviews?.interview_duration || 30
 
   const { subject, html, text } = getEmailContent(reminderType, locale, {
-    candidateName: candidate.name || 'Candidate',
+    candidateName: candidate?.name || 'Candidate',
     jobTitle: job.title,
     companyName: company.name,
     scheduledTime,
@@ -327,13 +329,13 @@ async function sendReminderEmail(
   try {
     await getTransporter().sendMail({
       from: `"${company.name} via Foundire" <${getMailerSenderEmail()}>`,
-      to: candidate.email,
+      to: recipientEmail,
       subject,
       html,
       text,
     })
 
-    console.log(`[Reminder] Sent ${reminderType} reminder to ${candidate.email} for interview ${interview.id}`)
+    console.log(`[Reminder] Sent ${reminderType} reminder to ${recipientEmail} for interview ${interview.id}`)
     return true
   } catch (error) {
     console.error(`[Reminder] Failed to send ${reminderType} reminder for interview ${interview.id}:`, error)
@@ -367,6 +369,7 @@ export async function handleSendInterviewReminders(): Promise<SendRemindersRespo
         id,
         scheduled_at,
         candidate_timezone,
+        candidate_email,
         candidates(id, name, email),
         companies(id, name),
         jobs(id, title),
@@ -396,6 +399,7 @@ export async function handleSendInterviewReminders(): Promise<SendRemindersRespo
         id,
         scheduled_at,
         candidate_timezone,
+        candidate_email,
         candidates(id, name, email),
         companies(id, name),
         jobs(id, title),
@@ -424,6 +428,7 @@ export async function handleSendInterviewReminders(): Promise<SendRemindersRespo
             id: interview.id,
             scheduled_at: interview.scheduled_at as string,
             candidate_timezone: interview.candidate_timezone,
+            candidate_email: interview.candidate_email as string | null | undefined,
             candidates: interview.candidates as InterviewData['candidates'],
             companies: interview.companies as InterviewData['companies'],
             jobs: interview.jobs as InterviewData['jobs'],
@@ -455,6 +460,7 @@ export async function handleSendInterviewReminders(): Promise<SendRemindersRespo
             id: interview.id,
             scheduled_at: interview.scheduled_at as string,
             candidate_timezone: interview.candidate_timezone,
+            candidate_email: interview.candidate_email as string | null | undefined,
             candidates: interview.candidates as InterviewData['candidates'],
             companies: interview.companies as InterviewData['companies'],
             jobs: interview.jobs as InterviewData['jobs'],

@@ -145,6 +145,7 @@ export async function handleConfirmCopilotInterview(token: string, body?: unknow
         candidate_timezone,
         interview_id,
         candidate_id,
+        candidate_email,
         job_id,
         company_id,
         interviews(id, interview_duration),
@@ -184,6 +185,7 @@ export async function handleConfirmCopilotInterview(token: string, body?: unknow
 
     if (!alreadyConfirmed && schedulingMode !== 'instant') {
       const candidate = (copilotInterview as { candidates?: { name?: string | null; email?: string | null } | null }).candidates
+      const candidateEmail = (copilotInterview as { candidate_email?: string | null }).candidate_email || candidate?.email || null
       const job = (copilotInterview as { jobs?: { title?: string | null } | null }).jobs
       const company = (copilotInterview as { companies?: { name?: string | null } | null }).companies
       const interviewDuration =
@@ -191,7 +193,7 @@ export async function handleConfirmCopilotInterview(token: string, body?: unknow
       const candidateTimezoneValue = (copilotInterview as { candidate_timezone?: string | null }).candidate_timezone || candidateTimezone
       const scheduledAt = (copilotInterview as { scheduled_at?: string | null }).scheduled_at
 
-      if (candidate?.email && job?.title && company?.name && scheduledAt) {
+      if (candidateEmail && job?.title && company?.name && scheduledAt) {
         const normalizedLocale = candidateLocale ? candidateLocale.split('-')[0] : null
         const locale: 'en' | 'zh' | 'es' | 'fr' =
           normalizedLocale === 'zh' || normalizedLocale === 'en' || normalizedLocale === 'es' || normalizedLocale === 'fr'
@@ -204,8 +206,8 @@ export async function handleConfirmCopilotInterview(token: string, body?: unknow
 
         try {
           await sendInterviewConfirmedEmail({
-            to: candidate.email,
-            candidateName: candidate.name || 'Candidate',
+            to: candidateEmail,
+            candidateName: candidate?.name || 'Candidate',
             jobTitle: job.title,
             companyName: company.name,
             joinLink,

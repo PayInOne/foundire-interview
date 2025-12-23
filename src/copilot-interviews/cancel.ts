@@ -45,6 +45,7 @@ export async function handleCancelCopilotInterview(
         job_id,
         company_id,
         interviewer_email,
+        candidate_email,
         livekit_room_name,
         livekit_region,
         candidates(id, name, email),
@@ -67,6 +68,7 @@ export async function handleCancelCopilotInterview(
       interviewer_email: string | null
       livekit_room_name: string | null
       livekit_region: string | null
+      candidate_email?: string | null
       candidates: { name?: string | null; email?: string | null } | null
       jobs: { title?: string | null } | null
       companies: { name?: string | null } | null
@@ -120,11 +122,11 @@ export async function handleCancelCopilotInterview(
     }
 
     const smtpReady = Boolean(process.env.SMTP_ADDRESS && process.env.SMTP_USERNAME && process.env.SMTP_PASSWORD && process.env.MAILER_SENDER_EMAIL)
-    if (smtpReady && interview.candidates?.email && interview.jobs?.title && interview.companies?.name) {
+    const candidateEmail = interview.candidate_email || interview.candidates?.email || null
+    if (smtpReady && candidateEmail && interview.jobs?.title && interview.companies?.name) {
       const companyName = interview.companies.name
       const jobTitle = interview.jobs.title
-      const candidateEmail = interview.candidates.email
-      const candidateName = interview.candidates.name || 'Candidate'
+      const candidateName = interview.candidates?.name || 'Candidate'
 
       const subjects: Record<typeof locale, string> = {
         zh: `${companyName} - 面试已取消 - ${jobTitle}`,
@@ -181,4 +183,3 @@ export async function handleCancelCopilotInterview(
     return { status: 500, body: { success: false, error: 'Internal server error' } }
   }
 }
-

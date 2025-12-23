@@ -41,6 +41,7 @@ import { handleCancelCopilotInterview } from './copilot-interviews/cancel'
 import { handleCreateLiveKitToken } from './livekit/standard-token'
 import { handleLiveKitWebhook } from './livekit/webhook'
 import { handleScheduleCoseatInterview, handleGetActiveCoseatInterview } from './coseat/schedule'
+import { handleCancelCoseatInterview } from './coseat/cancel'
 import { handleGetCoseatInterview } from './coseat/get'
 import { handleToggleCoseatAi } from './coseat/ai'
 import { handleCoseatHeartbeat } from './coseat/heartbeat'
@@ -907,6 +908,13 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
         if (segments.length === 3 && method === 'GET') {
           const userId = url.searchParams.get('userId') || ''
           const response = await handleGetCoseatInterview(coseatInterviewId, userId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'cancel' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleCancelCoseatInterview(coseatInterviewId, body)
           sendJson(res, response.status, response.body)
           return
         }

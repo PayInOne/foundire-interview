@@ -11,6 +11,8 @@ function detectLocale(input: string | undefined): 'en' | 'zh' | 'es' | 'fr' {
   return 'en'
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 type SchedulingMode = 'instant' | 'scheduled' | 'candidate_choice'
 
 interface TimeSlot {
@@ -40,16 +42,23 @@ function formatDateTime(isoString: string, locale: 'en' | 'zh' | 'es' | 'fr', ti
 
 export type CopilotSendInvitationResponse =
   | { status: 200; body: Record<string, unknown> }
-  | { status: 404 | 500; body: Record<string, unknown> }
+  | { status: 400 | 404 | 500; body: Record<string, unknown> }
 
 export async function handleSendCopilotInvitationEmail(
   copilotInterviewId: string,
   body: unknown
 ): Promise<CopilotSendInvitationResponse> {
   try {
+    console.log('[SendInvitation] Received body:', JSON.stringify(body))
     const record = asRecord(body) ?? {}
     const localeInput = getOptionalString(record, 'locale') || getOptionalString(record, 'acceptLanguage')
     const locale = detectLocale(localeInput)
+    const candidateEmailOverride = getOptionalString(record, 'candidateEmail')?.trim()
+    console.log('[SendInvitation] candidateEmailOverride:', candidateEmailOverride)
+
+    if (candidateEmailOverride && !EMAIL_REGEX.test(candidateEmailOverride)) {
+      return { status: 400, body: { success: false, error: 'Invalid candidate email' } }
+    }
 
     const adminSupabase = createAdminClient()
 
@@ -60,6 +69,7 @@ export async function handleSendCopilotInvitationEmail(
         id,
         invitation_expires_at,
         interviewer_email,
+        candidate_email,
         confirmation_token,
         scheduling_mode,
         scheduled_at,
@@ -81,6 +91,7 @@ export async function handleSendCopilotInvitationEmail(
     const candidate = (copilotInterview as { candidates?: unknown }).candidates as
       | { name?: string | null; email?: string | null }
       | null
+    const interviewCandidateEmail = (copilotInterview as { candidate_email?: string | null }).candidate_email
     const job = (copilotInterview as { jobs?: unknown }).jobs as { title?: string | null } | null
     const company = (copilotInterview as { companies?: unknown }).companies as { name?: string | null } | null
     const invitationExpiresAt = (copilotInterview as { invitation_expires_at?: string | null }).invitation_expires_at
@@ -90,8 +101,30 @@ export async function handleSendCopilotInvitationEmail(
     const interviewerTimezone = (copilotInterview as { interviewer_timezone?: string | null }).interviewer_timezone
     const confirmationToken = (copilotInterview as { confirmation_token?: string | null }).confirmation_token
 
-    if (!candidate?.email || !job?.title || !company?.name || !invitationExpiresAt) {
+    const recipientEmail = candidateEmailOverride || interviewCandidateEmail || candidate?.email || null
+    console.log('[SendInvitation] Email resolution:', {
+      candidateEmailOverride,
+      interviewCandidateEmail,
+      candidateEmail: candidate?.email,
+      recipientEmail,
+    })
+
+    if (!recipientEmail || !job?.title || !company?.name || !invitationExpiresAt) {
       return { status: 500, body: { success: false, error: 'Interview data incomplete' } }
+    }
+
+    if (candidateEmailOverride && candidateEmailOverride !== interviewCandidateEmail) {
+      console.log('[SendInvitation] Updating candidate_email from', interviewCandidateEmail, 'to', candidateEmailOverride)
+      const { error: updateError } = await adminSupabase
+        .from('copilot_interviews')
+        .update({ candidate_email: candidateEmailOverride, updated_at: new Date().toISOString() })
+        .eq('id', copilotInterviewId)
+
+      if (updateError) {
+        console.warn('[SendInvitation] Failed to update candidate email:', updateError)
+      } else {
+        console.log('[SendInvitation] Successfully updated candidate_email')
+      }
     }
 
     const baseUrl = getAppPublicUrl()
@@ -129,10 +162,10 @@ export async function handleSendCopilotInvitationEmail(
     }
 
     const greetings: Record<typeof locale, string> = {
-      zh: `你好 ${candidate.name || ''}，`,
-      en: `Hi ${candidate.name || 'there'},`,
-      es: `Hola ${candidate.name || ''},`,
-      fr: `Bonjour ${candidate.name || ''},`,
+      zh: `你好 ${candidate?.name || ''}，`,
+      en: `Hi ${candidate?.name || 'there'},`,
+      es: `Hola ${candidate?.name || ''},`,
+      fr: `Bonjour ${candidate?.name || ''},`,
     }
 
     const introByMode: Record<typeof locale, Record<SchedulingMode, string>> = {
@@ -310,15 +343,20 @@ ${actionLabel}: ${actionUrl}
 Contact: ${contactEmail}
     `
 
-    const smtpReady = Boolean(process.env.SMTP_ADDRESS && process.env.SMTP_USERNAME && process.env.SMTP_PASSWORD && process.env.MAILER_SENDER_EMAIL)
+    const smtpReady = Boolean(
+      process.env.SMTP_ADDRESS &&
+        process.env.SMTP_USERNAME &&
+        process.env.SMTP_PASSWORD &&
+        process.env.MAILER_SENDER_EMAIL
+    )
     if (!smtpReady) {
-      return { status: 200, body: { success: true, message: 'Interview scheduled but email not sent (SMTP not configured)' } }
+      return { status: 500, body: { success: false, error: 'SMTP not configured' } }
     }
 
     try {
       await getTransporter().sendMail({
         from: `"${company.name}" <${getMailerSenderEmail()}>`,
-        to: candidate.email,
+        to: recipientEmail,
         subject,
         html,
         text,
@@ -326,10 +364,9 @@ Contact: ${contactEmail}
     } catch (emailError) {
       console.error('Send invitation email error:', emailError)
       return {
-        status: 200,
+        status: 500,
         body: {
-          success: true,
-          warning: 'Interview scheduled but email failed to send',
+          success: false,
           error: emailError instanceof Error ? emailError.message : 'Email error',
         },
       }
