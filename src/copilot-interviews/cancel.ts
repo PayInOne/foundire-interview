@@ -129,28 +129,132 @@ export async function handleCancelCopilotInterview(
       const jobTitle = interview.jobs.title
       const candidateName = interview.candidates?.name || 'Candidate'
 
-      const subjects: Record<typeof locale, string> = {
-        zh: `${companyName} - 面试已取消 - ${jobTitle}`,
-        en: `${companyName} - Interview Cancelled - ${jobTitle}`,
-        es: `${companyName} - Entrevista Cancelada - ${jobTitle}`,
-        fr: `${companyName} - Entretien Annulé - ${jobTitle}`,
+      const content: Record<typeof locale, {
+        subject: string
+        title: string
+        greeting: string
+        cancelText: string
+        cancelledByLabel: string
+        cancelledByValue: string
+        reasonLabel: string
+        apology: string
+        regards: string
+        team: string
+        tagline: string
+      }> = {
+        zh: {
+          subject: `${companyName} - 面试已取消 - ${jobTitle}`,
+          title: '面试已取消',
+          greeting: `${candidateName}，您好！`,
+          cancelText: `很抱歉通知您，您在 ${companyName} 应聘 ${jobTitle} 职位的面试已被取消。`,
+          cancelledByLabel: '取消方',
+          cancelledByValue: cancelledBy === 'interviewer' ? '招聘方' : '候选人',
+          reasonLabel: '原因',
+          apology: '对此给您带来的不便，我们深表歉意。如有任何疑问，请联系招聘团队。',
+          regards: '此致，',
+          team: `${companyName} 招聘团队`,
+          tagline: '像创始人一样招聘',
+        },
+        en: {
+          subject: `${companyName} - Interview Cancelled - ${jobTitle}`,
+          title: 'Interview Cancelled',
+          greeting: `Hi ${candidateName},`,
+          cancelText: `We regret to inform you that your interview for ${jobTitle} at ${companyName} has been cancelled.`,
+          cancelledByLabel: 'Cancelled by',
+          cancelledByValue: cancelledBy === 'interviewer' ? 'Hiring Team' : 'Candidate',
+          reasonLabel: 'Reason',
+          apology: 'We apologize for any inconvenience this may have caused. Please contact the hiring team if you have any questions.',
+          regards: 'Best regards,',
+          team: `The Hiring Team at ${companyName}`,
+          tagline: 'HIRE LIKE A FOUNDER',
+        },
+        es: {
+          subject: `${companyName} - Entrevista Cancelada - ${jobTitle}`,
+          title: 'Entrevista Cancelada',
+          greeting: `Hola ${candidateName},`,
+          cancelText: `Lamentamos informarte que tu entrevista para ${jobTitle} en ${companyName} ha sido cancelada.`,
+          cancelledByLabel: 'Cancelada por',
+          cancelledByValue: cancelledBy === 'interviewer' ? 'Equipo de Contratación' : 'Candidato',
+          reasonLabel: 'Motivo',
+          apology: 'Pedimos disculpas por las molestias que esto pueda haber causado. Por favor contacta al equipo de contratación si tienes alguna pregunta.',
+          regards: 'Saludos cordiales,',
+          team: `El Equipo de Contratación de ${companyName}`,
+          tagline: 'CONTRATA COMO UN FUNDADOR',
+        },
+        fr: {
+          subject: `${companyName} - Entretien Annulé - ${jobTitle}`,
+          title: 'Entretien Annulé',
+          greeting: `Bonjour ${candidateName},`,
+          cancelText: `Nous avons le regret de vous informer que votre entretien pour ${jobTitle} chez ${companyName} a été annulé.`,
+          cancelledByLabel: 'Annulé par',
+          cancelledByValue: cancelledBy === 'interviewer' ? 'Équipe de Recrutement' : 'Candidat',
+          reasonLabel: 'Raison',
+          apology: 'Nous nous excusons pour tout inconvénient que cela a pu causer. Veuillez contacter l\'équipe de recrutement si vous avez des questions.',
+          regards: 'Cordialement,',
+          team: `L'Équipe de Recrutement de ${companyName}`,
+          tagline: 'RECRUTEZ COMME UN FONDATEUR',
+        },
       }
 
-      const byLabel: Record<typeof locale, string> = {
-        zh: cancelledBy === 'interviewer' ? '面试官' : '候选人',
-        en: cancelledBy === 'interviewer' ? 'Interviewer' : 'Candidate',
-        es: cancelledBy === 'interviewer' ? 'Entrevistador' : 'Candidato',
-        fr: cancelledBy === 'interviewer' ? 'Recruteur' : 'Candidat',
-      }
+      const c = content[locale]
+      const contactEmail = interview.interviewer_email || 'hr@company.com'
 
       const html = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #111827;">
-          <h2 style="margin: 0 0 16px 0;">${subjects[locale]}</h2>
-          <p style="margin: 0 0 8px 0;">Hi ${candidateName},</p>
-          <p style="margin: 0 0 16px 0;">Your interview for <strong>${jobTitle}</strong> has been cancelled.</p>
-          <p style="margin: 0 0 8px 0;"><strong>Cancelled by:</strong> ${byLabel[locale]}</p>
-          ${reason ? `<p style="margin: 0 0 8px 0;"><strong>Reason:</strong> ${reason}</p>` : ''}
-          <p style="margin: 24px 0 0 0; color: #6b7280; font-size: 12px;">Contact: ${interview.interviewer_email || 'hr@company.com'}</p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+          <div style="background: linear-gradient(135deg, #1E2E57 0%, #0A0E27 100%); padding: 40px 30px; text-align: center;">
+            <div style="margin-bottom: 12px;">
+              <span style="font-size: 36px; font-weight: 700; color: #00F0FF; text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);">
+                Foundire
+              </span>
+            </div>
+            <p style="color: #00F0FF; font-size: 13px; letter-spacing: 2px; margin: 0; font-weight: 600; opacity: 0.9;">
+              ${c.tagline}
+            </p>
+          </div>
+
+          <div style="padding: 40px 30px;">
+            <div style="text-align: center; margin-bottom: 25px;">
+              <div style="display: inline-block; width: 60px; height: 60px; background-color: #ef4444; border-radius: 50%; line-height: 60px;">
+                <span style="color: white; font-size: 28px;">✕</span>
+              </div>
+            </div>
+
+            <h1 style="color: #1E2E57; font-size: 24px; font-weight: 700; margin: 0 0 25px 0; text-align: center;">
+              ${c.title}
+            </h1>
+
+            <p style="color: #4b5563; font-size: 16px; margin-bottom: 10px;">${c.greeting}</p>
+
+            <p style="color: #1f2937; font-size: 16px; line-height: 1.7; margin-bottom: 25px;">
+              ${c.cancelText}
+            </p>
+
+            <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; margin-bottom: 25px;">
+              <p style="margin: 0 0 8px 0; color: #1E2E57;">
+                <strong>${c.cancelledByLabel}:</strong> ${c.cancelledByValue}
+              </p>
+              ${reason ? `<p style="margin: 0; color: #1E2E57;"><strong>${c.reasonLabel}:</strong> ${reason}</p>` : ''}
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 25px;">
+              ${c.apology}
+            </p>
+
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              ${c.regards}<br/>
+              ${c.team}
+            </p>
+
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 20px;">
+              Contact: <a href="mailto:${contactEmail}" style="color: #2563eb;">${contactEmail}</a>
+            </p>
+          </div>
+
+          <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 12px; margin: 0;">
+              © ${new Date().getFullYear()} Foundire. All rights reserved.
+            </p>
+          </div>
         </div>
       `
 
@@ -158,7 +262,7 @@ export async function handleCancelCopilotInterview(
         await getTransporter().sendMail({
           from: `"${companyName}" <${getMailerSenderEmail()}>`,
           to: candidateEmail,
-          subject: subjects[locale],
+          subject: c.subject,
           html,
         })
 
@@ -166,7 +270,7 @@ export async function handleCancelCopilotInterview(
           await getTransporter().sendMail({
             from: `"${companyName}" <${getMailerSenderEmail()}>`,
             to: interview.interviewer_email,
-            subject: subjects[locale],
+            subject: c.subject,
             html,
           })
         }

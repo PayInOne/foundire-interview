@@ -123,26 +123,82 @@ export async function sendInterviewConfirmedEmail({
   const t = content[locale]
   const formattedScheduledTime = formatDateTime(scheduledAt, locale, candidateTimezone)
 
+  const taglines: Record<typeof locale, string> = {
+    en: 'HIRE LIKE A FOUNDER',
+    zh: '像创始人一样招聘',
+    es: 'CONTRATA COMO UN FUNDADOR',
+    fr: 'RECRUTEZ COMME UN FONDATEUR',
+  }
+
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #111827;">
-      <h2 style="margin: 0 0 16px 0;">${t.title}</h2>
-      <p style="margin: 0 0 12px 0;">${t.greeting}</p>
-      <p style="margin: 0 0 16px 0;">${t.confirmText}</p>
-      <div style="background-color: #f0fdff; border-left: 4px solid #00F0FF; padding: 16px; margin: 0 0 16px 0;">
-        <strong>${t.scheduledTime}:</strong> ${formattedScheduledTime}
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+      <div style="background: linear-gradient(135deg, #1E2E57 0%, #0A0E27 100%); padding: 40px 30px; text-align: center;">
+        <div style="margin-bottom: 12px;">
+          <span style="font-size: 36px; font-weight: 700; color: #00F0FF; text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);">
+            Foundire
+          </span>
+        </div>
+        <p style="color: #00F0FF; font-size: 13px; letter-spacing: 2px; margin: 0; font-weight: 600; opacity: 0.9;">
+          ${taglines[locale]}
+        </p>
       </div>
-      <p style="margin: 0 0 16px 0;"><strong>${t.durationLabel}:</strong> ${t.durationText}</p>
-      <p style="margin: 24px 0;">
-        <a href="${joinLink}" style="display: inline-block; padding: 12px 18px; background: #1E2E57; color: #00F0FF; text-decoration: none; border-radius: 8px; font-weight: 600;">
-          ${t.joinButton}
-        </a>
-      </p>
-      <p style="margin: 0 0 16px 0; color: #6b7280;">${t.reminderTitle}:</p>
-      <ul style="margin: 0 0 16px 16px; color: #6b7280;">
-        <li>${t.reminder24h}</li>
-        <li>${t.reminder1h}</li>
-      </ul>
-      <p style="margin: 24px 0 0 0; color: #6b7280;">${t.regards}<br/>${t.hiringTeam}</p>
+
+      <div style="padding: 40px 30px;">
+        <div style="text-align: center; margin-bottom: 25px;">
+          <div style="display: inline-block; width: 60px; height: 60px; background-color: #22c55e; border-radius: 50%; line-height: 60px;">
+            <span style="color: white; font-size: 28px;">✓</span>
+          </div>
+        </div>
+
+        <h1 style="color: #1E2E57; font-size: 24px; font-weight: 700; margin: 0 0 25px 0; text-align: center;">
+          ${t.title}
+        </h1>
+
+        <p style="color: #4b5563; font-size: 16px; margin-bottom: 10px;">${t.greeting}</p>
+
+        <p style="color: #1f2937; font-size: 16px; line-height: 1.7; margin-bottom: 25px;">
+          ${t.confirmText}
+        </p>
+
+        <div style="background-color: #f0fdff; border-left: 4px solid #00F0FF; padding: 20px; margin-bottom: 25px;">
+          <p style="margin: 0 0 5px 0; color: #1E2E57; font-weight: 600;">
+            ${t.scheduledTime}:
+          </p>
+          <p style="margin: 0; color: #1f2937; font-size: 18px; font-weight: 600;">
+            ${formattedScheduledTime}
+          </p>
+        </div>
+
+        <p style="color: #4b5563; font-size: 16px; margin-bottom: 25px;">
+          <strong>${t.durationLabel}:</strong> ${t.durationText}
+        </p>
+
+        <div style="margin: 35px 0; text-align: center;">
+          <a href="${joinLink}"
+             style="background: linear-gradient(135deg, #1E2E57 0%, #0A0E27 100%); color: #00F0FF; padding: 16px 40px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600; font-size: 16px; border: 2px solid #00F0FF;">
+            ${t.joinButton}
+          </a>
+        </div>
+
+        <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 25px 0;">
+          <h3 style="margin: 0 0 15px 0; color: #1E2E57; font-size: 16px; font-weight: 600;">${t.reminderTitle}:</h3>
+          <ul style="color: #4b5563; margin: 0; padding-left: 20px; line-height: 1.8;">
+            <li>${t.reminder24h}</li>
+            <li>${t.reminder1h}</li>
+          </ul>
+        </div>
+
+        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+          ${t.regards}<br/>
+          ${t.hiringTeam}
+        </p>
+      </div>
+
+      <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="color: #6b7280; font-size: 12px; margin: 0;">
+          © ${new Date().getFullYear()} Foundire. All rights reserved.
+        </p>
+      </div>
     </div>
   `
 
