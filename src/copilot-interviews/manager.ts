@@ -12,6 +12,9 @@ export type RoomStatus =
   | 'in_progress'
   | 'completed'
   | 'cancelled'
+  | 'missed'
+
+export type SchedulingMode = 'instant' | 'scheduled' | 'candidate_choice'
 
 export interface CopilotInterviewState {
   id: string
@@ -32,6 +35,16 @@ export interface CopilotInterviewState {
   min_interviewers_required?: number
   max_interviewers?: number
   interview_duration?: number
+  // Scheduling fields
+  scheduling_mode: SchedulingMode
+  scheduled_at: string | null
+  available_slots: Array<{ start: string; end: string }> | null
+  interviewer_timezone: string | null
+  candidate_timezone: string | null
+  candidate_confirmed: boolean
+  schedule_confirmed_at: string | null
+  reminder_sent_24h: boolean
+  reminder_sent_1h: boolean
 }
 
 export interface CopilotInterviewParticipant {
@@ -213,7 +226,7 @@ function calculateNewRoomStatusMulti(
   joinedInterviewerCount: number,
   minRequired: number = 1
 ): RoomStatus {
-  if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+  if (currentStatus === 'completed' || currentStatus === 'cancelled' || currentStatus === 'missed') {
     return currentStatus
   }
 
@@ -236,7 +249,7 @@ function calculateNewRoomStatus(
   interviewerJoined: boolean,
   candidateJoined: boolean
 ): RoomStatus {
-  if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+  if (currentStatus === 'completed' || currentStatus === 'cancelled' || currentStatus === 'missed') {
     return currentStatus
   }
 

@@ -1,5 +1,4 @@
 import { createAdminClient } from '../supabase/admin'
-import { toJson } from '../supabase/json'
 
 export type TranscriptResponse =
   | { status: 200; body: { success: true } }
@@ -34,31 +33,16 @@ export async function handleSaveTranscript(body: unknown): Promise<TranscriptRes
 
   try {
     const adminClient = createAdminClient()
+    const entry = isQAFormat ? { question, answer } : message
 
-    const { data: interview, error: fetchError } = await adminClient
-      .from('interviews')
-      .select('transcript, interview_mode')
-      .eq('id', interviewId)
-      .single()
+    const { error: appendError } = await adminClient.rpc('append_interview_transcript', {
+      p_interview_id: interviewId,
+      p_entry: entry,
+      p_merge: false,
+    })
 
-    if (fetchError) {
-      return { status: 500, body: { error: `Failed to fetch interview: ${fetchError.message}` } }
-    }
-
-    const existingTranscript = (interview as unknown as { transcript?: unknown } | null)?.transcript
-    const transcriptEntries: unknown[] = Array.isArray(existingTranscript) ? existingTranscript : []
-
-    const updatedTranscript = isQAFormat
-      ? [...transcriptEntries, { question, answer }]
-      : [...transcriptEntries, message]
-
-    const { error: updateError } = await adminClient
-      .from('interviews')
-      .update({ transcript: toJson(updatedTranscript) })
-      .eq('id', interviewId)
-
-    if (updateError) {
-      return { status: 500, body: { error: `Failed to update transcript: ${updateError.message}` } }
+    if (appendError) {
+      return { status: 500, body: { error: `Failed to update transcript: ${appendError.message}` } }
     }
 
     return { status: 200, body: { success: true } }
@@ -67,4 +51,3 @@ export async function handleSaveTranscript(body: unknown): Promise<TranscriptRes
     return { status: 500, body: { error: message } }
   }
 }
-

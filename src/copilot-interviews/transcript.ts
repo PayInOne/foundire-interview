@@ -1,5 +1,4 @@
 import { createAdminClient } from '../supabase/admin'
-import { toJson } from '../supabase/json'
 import { asRecord, getOptionalString, getString } from '../utils/parse'
 
 type SpeakerRole = 'candidate' | 'interviewer' | 'interviewer_0' | 'interviewer_1' | 'interviewer_2'
@@ -88,19 +87,6 @@ export async function handlePostCopilotTranscript(
       }
     }
 
-    const { data: interview, error: interviewError } = await adminSupabase
-      .from('interviews')
-      .select('transcript')
-      .eq('id', interviewMeta.interview_id)
-      .single()
-
-    if (interviewError) {
-      console.error('Error fetching interview:', interviewError)
-      return { status: 500, body: { error: 'Failed to fetch interview' } }
-    }
-
-    const existingTranscript = ((interview as { transcript?: unknown } | null)?.transcript as CopilotTranscriptMessage[] | null) || []
-
     const newMessage: CopilotTranscriptMessage = {
       speaker,
       text,
@@ -111,19 +97,20 @@ export async function handlePostCopilotTranscript(
       speaker_name,
     }
 
-    const updatedTranscript = [...existingTranscript, newMessage]
+    const { data: appendResult, error: appendError } = await adminSupabase.rpc('append_interview_transcript', {
+      p_interview_id: interviewMeta.interview_id,
+      p_entry: newMessage,
+      p_merge: false,
+    })
 
-    const { error: updateError } = await adminSupabase
-      .from('interviews')
-      .update({ transcript: toJson(updatedTranscript) })
-      .eq('id', interviewMeta.interview_id)
-
-    if (updateError) {
-      console.error('Error updating transcript:', updateError)
+    if (appendError) {
+      console.error('Error appending transcript:', appendError)
       return { status: 500, body: { error: 'Failed to update transcript' } }
     }
 
-    return { status: 200, body: { success: true, data: newMessage } }
+    const row = Array.isArray(appendResult) ? appendResult[0] : null
+    const saved = (row && typeof row === 'object' && 'updated_entry' in row ? (row as { updated_entry: CopilotTranscriptMessage }).updated_entry : newMessage)
+    return { status: 200, body: { success: true, data: saved } }
   } catch (error) {
     console.error('Error in copilot transcript POST:', error)
     return { status: 500, body: { error: 'Internal server error' } }
@@ -185,4 +172,3 @@ export async function handleGetCopilotTranscript(
     return { status: 500, body: { error: 'Internal server error' } }
   }
 }
-

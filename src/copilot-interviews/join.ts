@@ -59,6 +59,67 @@ export async function handleJoinCopilotInterview(
       room_status: string
       livekit_room_name: string | null
       livekit_region: LiveKitRegion | null
+      scheduling_mode: string | null
+      scheduled_at: string | null
+      candidate_confirmed: boolean | null
+    }
+
+    const isScheduledMode =
+      copilotInterview.scheduling_mode === 'scheduled' || copilotInterview.scheduling_mode === 'candidate_choice'
+
+    if (isScheduledMode && !copilotInterview.candidate_confirmed) {
+      return {
+        status: 403,
+        body: {
+          error: 'Interview has not been confirmed yet',
+          code: 'NOT_CONFIRMED',
+        },
+      }
+    }
+
+    if (isScheduledMode && !copilotInterview.scheduled_at) {
+      return {
+        status: 403,
+        body: {
+          error: 'Interview time not confirmed yet',
+          code: 'NO_SCHEDULED_TIME',
+        },
+      }
+    }
+
+    // Check time window for scheduled interviews (±15 minutes)
+    if (isScheduledMode && copilotInterview.scheduled_at) {
+      const scheduledAt = new Date(copilotInterview.scheduled_at)
+      const now = new Date()
+      const windowMinutes = 15
+      const windowStart = new Date(scheduledAt.getTime() - windowMinutes * 60 * 1000)
+      const windowEnd = new Date(scheduledAt.getTime() + windowMinutes * 60 * 1000)
+
+      if (now < windowStart) {
+        const minutesUntilOpen = Math.ceil((windowStart.getTime() - now.getTime()) / (60 * 1000))
+        return {
+          status: 403,
+          body: {
+            error: 'Interview has not opened yet',
+            code: 'TOO_EARLY',
+            scheduledAt: copilotInterview.scheduled_at,
+            windowOpensAt: windowStart.toISOString(),
+            minutesUntilOpen,
+          },
+        }
+      }
+
+      if (now > windowEnd) {
+        return {
+          status: 403,
+          body: {
+            error: 'Interview time window has closed',
+            code: 'TOO_LATE',
+            scheduledAt: copilotInterview.scheduled_at,
+            windowClosedAt: windowEnd.toISOString(),
+          },
+        }
+      }
     }
 
     let participantIndex = 0
@@ -100,6 +161,10 @@ export async function handleJoinCopilotInterview(
 
     if (copilotInterview.room_status === 'cancelled') {
       return { status: 410, body: { error: 'Interview has been cancelled' } }
+    }
+
+    if (copilotInterview.room_status === 'missed') {
+      return { status: 410, body: { error: 'Interview has been marked as missed' } }
     }
 
     const joinResult =

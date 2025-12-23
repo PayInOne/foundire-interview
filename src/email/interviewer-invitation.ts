@@ -7,7 +7,7 @@ export interface SendInterviewerInvitationParams {
   jobTitle: string
   invitedBy: string
   interviewerUrl: string
-  scheduledAt: string
+  scheduledAt?: string | null
   locale?: string
 }
 
@@ -21,10 +21,18 @@ export async function sendInterviewerInvitationEmail({
   scheduledAt,
   locale = 'en',
 }: SendInterviewerInvitationParams) {
-  const formattedDate = new Date(scheduledAt).toLocaleString(locale === 'zh' ? 'zh-CN' : locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
+  const tbdLabels: Record<string, string> = {
+    zh: '待确认',
+    en: 'To be confirmed',
+    es: 'Por confirmar',
+    fr: 'À confirmer',
+  }
+  const formattedDate = scheduledAt
+    ? new Date(scheduledAt).toLocaleString(locale === 'zh' ? 'zh-CN' : locale, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : (tbdLabels[locale] || tbdLabels.en)
 
   const content = {
     en: {
@@ -189,4 +197,3 @@ ${t.team}
 
   return { success: true, messageId: info.messageId }
 }
-

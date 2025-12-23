@@ -18,6 +18,42 @@ function generateConfirmationToken(): string {
   return randomBytes(32).toString('hex')
 }
 
+// Scheduling mode types
+type SchedulingMode = 'instant' | 'scheduled' | 'candidate_choice'
+
+interface TimeSlot {
+  start: string // ISO8601
+  end: string // ISO8601
+}
+
+const MAX_SCHEDULING_DAYS = 30
+
+function isValidSchedulingMode(value: unknown): value is SchedulingMode {
+  return value === 'instant' || value === 'scheduled' || value === 'candidate_choice'
+}
+
+function parseTimeSlots(value: unknown, now: Date, maxDate: Date): TimeSlot[] | null {
+  if (!Array.isArray(value)) return null
+  const nowTime = now.getTime()
+  const maxTime = maxDate.getTime()
+  const slots: TimeSlot[] = []
+  const seen = new Set<string>()
+  for (const slot of value) {
+    if (typeof slot !== 'object' || slot === null) return null
+    const { start, end } = slot as { start?: unknown; end?: unknown }
+    if (typeof start !== 'string' || typeof end !== 'string') return null
+    const startTime = new Date(start).getTime()
+    const endTime = new Date(end).getTime()
+    if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) return null
+    if (startTime >= endTime) return null
+    if (startTime <= nowTime || startTime > maxTime) return null
+    if (seen.has(start)) return null
+    seen.add(start)
+    slots.push({ start, end })
+  }
+  return slots.length >= 2 && slots.length <= 5 ? slots : null
+}
+
 type CopilotInterviewBase = {
   id: string
   interview_id: string
@@ -28,6 +64,12 @@ type CopilotInterviewBase = {
   invitation_expires_at: string | null
   livekit_room_name: string | null
   created_at: string | null
+  confirmation_token: string | null
+  confirmation_url?: string | null
+  scheduling_mode: SchedulingMode
+  available_slots: TimeSlot[] | null
+  interviewer_timezone: string | null
+  candidate_timezone: string | null
 }
 
 type CopilotInterviewParticipantRow = {
@@ -58,6 +100,36 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     const jobId = getString(record, 'jobId')
     const candidateEmail = getString(record, 'candidateEmail')
     const userId = getString(record, 'userId')
+
+    // Scheduling parameters
+    const schedulingModeRaw = record.schedulingMode
+    const schedulingMode: SchedulingMode = isValidSchedulingMode(schedulingModeRaw) ? schedulingModeRaw : 'instant'
+    const scheduledAtRaw = getString(record, 'scheduledAt')
+    const availableSlotsRaw = record.availableSlots
+    const interviewerTimezone = getString(record, 'interviewerTimezone')
+    const now = new Date()
+    const maxDate = new Date(now.getTime() + MAX_SCHEDULING_DAYS * 24 * 60 * 60 * 1000)
+    const parsedSlots = schedulingMode === 'candidate_choice' ? parseTimeSlots(availableSlotsRaw, now, maxDate) : null
+    const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : null
+
+    // Validate scheduling parameters
+    if (schedulingMode === 'scheduled') {
+      if (!scheduledAt || !Number.isFinite(scheduledAt.getTime())) {
+        return { status: 400, body: { success: false, error: 'scheduledAt is required for scheduled mode and must be a valid ISO8601 date' } }
+      }
+      if (scheduledAt.getTime() <= now.getTime()) {
+        return { status: 400, body: { success: false, error: 'scheduledAt must be in the future' } }
+      }
+      if (scheduledAt.getTime() > maxDate.getTime()) {
+        return { status: 400, body: { success: false, error: `scheduledAt must be within ${MAX_SCHEDULING_DAYS} days` } }
+      }
+    }
+
+    if (schedulingMode === 'candidate_choice') {
+      if (!parsedSlots) {
+        return { status: 400, body: { success: false, error: 'availableSlots must be an array of 2-5 time slots with start and end ISO8601 dates' } }
+      }
+    }
 
     const interviewerIdsValue = record.interviewerIds
     const interviewerIds = Array.isArray(interviewerIdsValue)
@@ -112,7 +184,16 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     const user = userData.user
     const creatorName = (user.user_metadata?.full_name as string | undefined) || user.email || 'A colleague'
 
-    const scheduledTime = new Date()
+    // Determine scheduled time based on scheduling mode
+    let scheduledTime: Date | null = null
+    if (schedulingMode === 'scheduled' && scheduledAt) {
+      scheduledTime = scheduledAt
+    } else if (schedulingMode === 'instant') {
+      scheduledTime = now
+    }
+    // For candidate_choice, scheduledTime remains null until candidate selects a slot
+
+    const availableSlots = schedulingMode === 'candidate_choice' ? parsedSlots : null
 
     const { data: candidate, error: candidateError } = await adminSupabase
       .from('candidates')
@@ -151,7 +232,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
       .from('copilot_interviews')
       .select('id, interview_id, room_status, scheduled_at, created_at')
       .eq('candidate_id', candidateId)
-      .not('room_status', 'in', '(completed,cancelled)')
+      .not('room_status', 'in', '(completed,cancelled,missed)')
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -183,8 +264,24 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     const interviewId = (interview as { id: string }).id
     let confirmationToken = generateConfirmationToken()
 
-    const expiresAt = new Date()
+    let expiresAt = new Date(now.getTime())
     expiresAt.setDate(expiresAt.getDate() + 7)
+    let latestSlotStart: Date | null = null
+    if (scheduledTime) {
+      latestSlotStart = scheduledTime
+    } else if (availableSlots && availableSlots.length > 0) {
+      const latestTime = Math.max(...availableSlots.map((slot) => new Date(slot.start).getTime()))
+      if (Number.isFinite(latestTime)) {
+        latestSlotStart = new Date(latestTime)
+      }
+    }
+    if (latestSlotStart) {
+      const extendedExpiry = new Date(latestSlotStart.getTime())
+      extendedExpiry.setDate(extendedExpiry.getDate() + 1)
+      if (extendedExpiry.getTime() > expiresAt.getTime()) {
+        expiresAt = extendedExpiry
+      }
+    }
 
     const roomName = `ai-interview-${interviewId}`
 
@@ -203,13 +300,17 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
           job_id: jobId,
           company_id: companyId,
           room_status: 'waiting_both',
-          scheduled_at: scheduledTime.toISOString(),
+          scheduled_at: scheduledTime ? scheduledTime.toISOString() : null,
           invitation_expires_at: expiresAt.toISOString(),
           confirmation_token: tokenForAttempt,
           interviewer_email: user.email,
           candidate_email: candidateEmail,
           livekit_room_name: roomName,
           ai_enabled: true,
+          // New scheduling fields
+          scheduling_mode: schedulingMode,
+          available_slots: availableSlots,
+          interviewer_timezone: interviewerTimezone || null,
         })
         .select()
         .single()
@@ -239,7 +340,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     const confirmationUrl = `${baseUrl}/copilot-interview/confirm/${confirmationToken}`
     const interviewerUrl = `${baseUrl}/copilot-interview/${(copilotInterview as { id: string }).id}/interviewer`
     const candidateUrl = `${baseUrl}/copilot-interview/${(copilotInterview as { id: string }).id}/candidate`
-    const scheduledAt = (copilotInterview as { scheduled_at?: string | null }).scheduled_at ?? scheduledTime.toISOString()
+    const scheduledAtForEmail = (copilotInterview as { scheduled_at?: string | null }).scheduled_at ?? (scheduledTime ? scheduledTime.toISOString() : null)
 
     const participantsToCreate: Array<{ copilot_interview_id: string; user_id: string; participant_index: number }> = [
       { copilot_interview_id: (copilotInterview as { id: string }).id, user_id: userId, participant_index: 0 },
@@ -298,7 +399,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
             jobTitle,
             invitedBy: creatorName,
             interviewerUrl,
-            scheduledAt,
+            scheduledAt: scheduledAtForEmail,
             locale,
           })
         })
@@ -331,10 +432,14 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
           confirmationUrl,
           interviewerUrl,
           candidateUrl,
-          scheduledAt,
+          scheduledAt: scheduledAtForEmail,
           expiresAt: (copilotInterview as { invitation_expires_at?: string | null }).invitation_expires_at,
           roomName,
           invitedInterviewers: validInterviewerIds,
+          // New scheduling fields
+          schedulingMode,
+          availableSlots,
+          interviewerTimezone: interviewerTimezone || null,
         },
       },
     }
@@ -362,12 +467,12 @@ export async function handleGetCopilotSchedule(
     let query = adminSupabase
       .from('copilot_interviews')
       .select(
-        'id, interview_id, interviewer_id, room_status, scheduled_at, candidate_confirmed, invitation_expires_at, livekit_room_name, created_at'
+        'id, interview_id, interviewer_id, room_status, scheduled_at, candidate_confirmed, invitation_expires_at, livekit_room_name, created_at, confirmation_token, scheduling_mode, available_slots, interviewer_timezone, candidate_timezone'
       )
       .eq('candidate_id', candidateId)
 
     if (!includeAll) {
-      query = query.not('room_status', 'in', '(completed,cancelled)')
+      query = query.not('room_status', 'in', '(completed,cancelled,missed)')
     }
 
     const { data, error } = await query
@@ -384,6 +489,12 @@ export async function handleGetCopilotSchedule(
     let interviewWithParticipants: CopilotInterviewWithParticipants | null = baseInterview
 
     if (baseInterview) {
+      const baseUrl = getAppPublicUrl()
+      const confirmationUrl = baseInterview.confirmation_token
+        ? `${baseUrl}/copilot-interview/confirm/${baseInterview.confirmation_token}`
+        : null
+      interviewWithParticipants = { ...baseInterview, confirmation_url: confirmationUrl }
+
       const { data: participants } = await adminSupabase
         .from('copilot_interview_participants')
         .select('user_id, participant_index, joined_at')
@@ -414,7 +525,10 @@ export async function handleGetCopilotSchedule(
           })
         )
 
-        interviewWithParticipants = { ...baseInterview, participants: enrichedParticipants }
+        interviewWithParticipants = {
+          ...(interviewWithParticipants || baseInterview),
+          participants: enrichedParticipants,
+        }
       }
     }
 

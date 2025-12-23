@@ -18,6 +18,8 @@ import { handleCleanupAllInterviews } from './interviews/cleanup-all'
 import { handleCreateCopilotInterview } from './copilot-interviews/create'
 import { handleScheduleCopilotInterview, handleGetCopilotSchedule } from './copilot-interviews/schedule'
 import { handleConfirmCopilotInterview, handleGetCopilotConfirmInfo } from './copilot-interviews/confirm'
+import { handleDeclineCopilotInterview } from './copilot-interviews/decline'
+import { handleSendInterviewReminders, handleCheckMissedInterviews } from './copilot-interviews/reminders'
 import { handleJoinCopilotInterview } from './copilot-interviews/join'
 import { handleGetCopilotInterviewStatus } from './copilot-interviews/status'
 import { handleCopilotInterviewHeartbeat } from './copilot-interviews/heartbeat'
@@ -697,7 +699,33 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
         method === 'POST'
       ) {
         const token = segments[3]
-        const response = await handleConfirmCopilotInterview(token)
+        const body = await readJsonBody(req)
+        const response = await handleConfirmCopilotInterview(token, body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (
+        segments.length === 4 &&
+        segments[0] === 'internal' &&
+        segments[1] === 'copilot-interviews' &&
+        segments[2] === 'decline' &&
+        method === 'POST'
+      ) {
+        const token = segments[3]
+        const response = await handleDeclineCopilotInterview(token)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/copilot-interviews/reminders') {
+        const response = await handleSendInterviewReminders()
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (method === 'POST' && pathname === '/internal/copilot-interviews/check-missed') {
+        const response = await handleCheckMissedInterviews()
         sendJson(res, response.status, response.body)
         return
       }

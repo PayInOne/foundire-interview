@@ -1,5 +1,4 @@
 import { createAdminClient } from '../supabase/admin'
-import { toJson } from '../supabase/json'
 import { asRecord, getBoolean, getNumber, getOptionalString, getString } from '../utils/parse'
 
 type Speaker = 'interviewer' | 'candidate'
@@ -77,77 +76,42 @@ export async function handlePostCoseatTranscript(
       return { status: 400, body: { success: false, error: 'Session is not active' } }
     }
 
-    const { data: interview, error: interviewError } = await adminSupabase
-      .from('interviews')
-      .select('transcript')
-      .eq('id', meta.interview_id)
-      .single()
-
-    if (interviewError) {
-      console.error('Error fetching interview:', interviewError)
-      return { status: 500, body: { success: false, error: 'Failed to fetch interview' } }
+    const newMessage: TranscriptMessage = {
+      speaker,
+      text,
+      timestamp: new Date().toISOString(),
+      ...(offsetSeconds !== null ? { offsetSeconds } : {}),
+      ...(confidence !== null ? { confidence } : {}),
+      ...(durationMs !== null ? { durationMs } : {}),
     }
 
-    const existingTranscript = ((interview as { transcript?: unknown } | null)?.transcript as TranscriptMessage[] | null) || []
-    const transcriptEntries: TranscriptMessage[] = Array.isArray(existingTranscript) ? existingTranscript : []
+    const { data: appendResult, error: appendError } = await adminSupabase.rpc('append_interview_transcript', {
+      p_interview_id: meta.interview_id,
+      p_entry: newMessage,
+      p_merge: merge,
+    })
 
-    let updatedTranscript: TranscriptMessage[]
-    let resultMessage: TranscriptMessage
-
-    if (merge && transcriptEntries.length > 0) {
-      const lastMessage = transcriptEntries[transcriptEntries.length - 1]
-      if (lastMessage.speaker === speaker) {
-        const mergedMessage: TranscriptMessage = {
-          ...lastMessage,
-          text: `${lastMessage.text} ${text}`.trim(),
-          confidence:
-            confidence !== null && lastMessage.confidence !== undefined
-              ? (lastMessage.confidence + confidence) / 2
-              : lastMessage.confidence ?? (confidence === null ? undefined : confidence),
-        }
-        updatedTranscript = [...transcriptEntries.slice(0, -1), mergedMessage]
-        resultMessage = mergedMessage
-      } else {
-        const newMessage: TranscriptMessage = {
-          speaker,
-          text,
-          timestamp: new Date().toISOString(),
-          ...(offsetSeconds !== null ? { offsetSeconds } : {}),
-          ...(confidence !== null ? { confidence } : {}),
-          ...(durationMs !== null ? { durationMs } : {}),
-        }
-        updatedTranscript = [...transcriptEntries, newMessage]
-        resultMessage = newMessage
-      }
-    } else {
-      const newMessage: TranscriptMessage = {
-        speaker,
-        text,
-        timestamp: new Date().toISOString(),
-        ...(offsetSeconds !== null ? { offsetSeconds } : {}),
-        ...(confidence !== null ? { confidence } : {}),
-        ...(durationMs !== null ? { durationMs } : {}),
-      }
-      updatedTranscript = [...transcriptEntries, newMessage]
-      resultMessage = newMessage
-    }
-
-    const { error: updateError } = await adminSupabase
-      .from('interviews')
-      .update({ transcript: toJson(updatedTranscript) })
-      .eq('id', meta.interview_id)
-
-    if (updateError) {
-      console.error('Error updating transcript:', updateError)
+    if (appendError) {
+      console.error('Error appending transcript:', appendError)
       return { status: 500, body: { success: false, error: 'Failed to save transcript' } }
     }
 
-    await adminSupabase
-      .from('coseat_interviews')
-      .update({ transcript_count: updatedTranscript.length })
-      .eq('id', coseatInterviewId)
+    const row = Array.isArray(appendResult) ? appendResult[0] : null
+    const saved = (row && typeof row === 'object' && 'updated_entry' in row
+      ? (row as { updated_entry: TranscriptMessage }).updated_entry
+      : newMessage)
+    const transcriptLength = (row && typeof row === 'object' && 'transcript_length' in row
+      ? (row as { transcript_length: number }).transcript_length
+      : null)
 
-    return { status: 200, body: { success: true, data: resultMessage } }
+    if (typeof transcriptLength === 'number' && Number.isFinite(transcriptLength)) {
+      await adminSupabase
+        .from('coseat_interviews')
+        .update({ transcript_count: transcriptLength })
+        .eq('id', coseatInterviewId)
+    }
+
+    return { status: 200, body: { success: true, data: saved } }
   } catch (error) {
     console.error('Error in POST /internal/coseat/[id]/transcript:', error)
     return { status: 500, body: { success: false, error: 'Internal server error' } }
@@ -210,4 +174,3 @@ export async function handleGetCoseatTranscript(
     return { status: 500, body: { success: false, error: 'Internal server error' } }
   }
 }
-
