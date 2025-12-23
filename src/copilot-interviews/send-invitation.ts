@@ -200,6 +200,15 @@ export async function handleSendCopilotInvitationEmail(
       selectTime: string
       slotOption: (index: number) => string
       timeWindow: string
+      tagline: string
+      whatYouNeed: string
+      needWebcam: string
+      needMicrophone: string
+      needQuiet: string
+      needBrowser: string
+      goodLuck: string
+      regards: string
+      hiringTeam: string
     }> = {
       zh: {
         validUntil: '有效期至',
@@ -210,6 +219,15 @@ export async function handleSendCopilotInvitationEmail(
         selectTime: '选择时间',
         slotOption: (index: number) => `选项 ${index}`,
         timeWindow: '请在预约时间前后 15 分钟内进入面试房间',
+        tagline: '像创始人一样招聘',
+        whatYouNeed: '面试准备',
+        needWebcam: '确保摄像头正常工作',
+        needMicrophone: '确保麦克风正常工作',
+        needQuiet: '选择安静的面试环境',
+        needBrowser: '使用 Chrome 或 Edge 浏览器',
+        goodLuck: '祝面试顺利！',
+        regards: '此致',
+        hiringTeam: '招聘团队',
       },
       en: {
         validUntil: 'Valid Until',
@@ -220,6 +238,15 @@ export async function handleSendCopilotInvitationEmail(
         selectTime: 'Select Time Slot',
         slotOption: (index: number) => `Option ${index}`,
         timeWindow: 'Please join within 15 minutes before or after the scheduled time',
+        tagline: 'HIRE LIKE A FOUNDER',
+        whatYouNeed: 'What You Need',
+        needWebcam: 'A working webcam',
+        needMicrophone: 'A working microphone',
+        needQuiet: 'A quiet environment',
+        needBrowser: 'Chrome or Edge browser',
+        goodLuck: 'Good luck with your interview!',
+        regards: 'Best regards,',
+        hiringTeam: 'The Hiring Team',
       },
       es: {
         validUntil: 'Válido hasta',
@@ -230,16 +257,34 @@ export async function handleSendCopilotInvitationEmail(
         selectTime: 'Seleccionar Horario',
         slotOption: (index: number) => `Opción ${index}`,
         timeWindow: 'Únete dentro de los 15 minutos antes o después de la hora programada',
+        tagline: 'CONTRATA COMO UN FUNDADOR',
+        whatYouNeed: 'Lo que necesitas',
+        needWebcam: 'Una cámara web funcionando',
+        needMicrophone: 'Un micrófono funcionando',
+        needQuiet: 'Un ambiente tranquilo',
+        needBrowser: 'Navegador Chrome o Edge',
+        goodLuck: '¡Buena suerte con tu entrevista!',
+        regards: 'Saludos cordiales,',
+        hiringTeam: 'El Equipo de Contratación',
       },
       fr: {
-        validUntil: 'Valable jusqu’au',
+        validUntil: "Valable jusqu'au",
         scheduledTime: 'Heure prévue',
         availableSlots: 'Créneaux disponibles',
         enterRoom: "Entrer dans la Salle d'Entretien",
-        confirm: 'Confirmer l’entretien',
+        confirm: "Confirmer l'entretien",
         selectTime: 'Choisir un créneau',
         slotOption: (index: number) => `Option ${index}`,
-        timeWindow: 'Merci de rejoindre dans les 15 minutes avant ou après l’heure prévue',
+        timeWindow: "Merci de rejoindre dans les 15 minutes avant ou après l'heure prévue",
+        tagline: 'RECRUTEZ COMME UN FONDATEUR',
+        whatYouNeed: 'Ce dont vous avez besoin',
+        needWebcam: 'Une webcam fonctionnelle',
+        needMicrophone: 'Un microphone fonctionnel',
+        needQuiet: 'Un environnement calme',
+        needBrowser: 'Navigateur Chrome ou Edge',
+        goodLuck: 'Bonne chance pour votre entretien !',
+        regards: 'Cordialement,',
+        hiringTeam: "L'équipe de recrutement",
       },
     }
 
@@ -281,52 +326,125 @@ export async function handleSendCopilotInvitationEmail(
     const subject = subjects[locale][schedulingMode]
     const intro = introByMode[locale][schedulingMode]
     const introText = intro.replace(/<[^>]+>/g, '')
+    const contactEmail = (copilotInterview as { interviewer_email?: string | null }).interviewer_email || 'hr@company.com'
 
     const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #111827;">
-        <h2 style="margin: 0 0 16px 0;">${company.name}</h2>
-        <p style="margin: 0 0 12px 0;">${greetings[locale]}</p>
-        <p style="margin: 0 0 16px 0;">${intro}</p>
-
-        ${
-          formattedScheduledTime
-            ? `
-        <div style="background-color: #f0fdff; border-left: 4px solid #00F0FF; padding: 16px; margin: 0 0 16px 0;">
-          <strong>${labels[locale].scheduledTime}:</strong> ${formattedScheduledTime}
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <!-- Header with Brand -->
+        <div style="background: linear-gradient(135deg, #1E2E57 0%, #0A0E27 100%); padding: 40px 30px; text-align: center;">
+          <div style="margin-bottom: 12px;">
+            <span style="font-size: 36px; font-weight: 700; color: #00F0FF; text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);">
+              Foundire
+            </span>
+          </div>
+          <p style="color: #00F0FF; font-size: 13px; letter-spacing: 2px; margin: 0; font-weight: 600; opacity: 0.9;">
+            ${labels[locale].tagline}
+          </p>
         </div>
-        `
-            : ''
-        }
 
-        ${
-          timeSlotsHtml
-            ? `
-        <div style="margin: 0 0 16px 0;">
-          <p style="margin: 0 0 10px 0; font-weight: 600;">${labels[locale].availableSlots}:</p>
-          ${timeSlotsHtml}
+        <!-- Main Content -->
+        <div style="padding: 40px 30px;">
+          <h1 style="color: #1E2E57; font-size: 24px; font-weight: 700; margin: 0 0 25px 0;">
+            ${company.name}
+          </h1>
+
+          <p style="color: #4b5563; font-size: 16px; margin-bottom: 10px;">${greetings[locale]}</p>
+
+          <p style="color: #1f2937; font-size: 16px; line-height: 1.7; margin-bottom: 25px;">
+            ${intro}
+          </p>
+
+          ${
+            formattedScheduledTime
+              ? `
+          <div style="background-color: #f0fdff; border-left: 4px solid #00F0FF; padding: 20px; margin-bottom: 25px;">
+            <p style="margin: 0; color: #1E2E57; font-weight: 600;">
+              ${labels[locale].scheduledTime}:
+            </p>
+            <p style="margin: 8px 0 0 0; color: #1f2937; font-size: 18px;">
+              ${formattedScheduledTime}
+            </p>
+          </div>
+          `
+              : ''
+          }
+
+          ${
+            timeSlotsHtml
+              ? `
+          <div style="margin-bottom: 25px;">
+            <p style="margin: 0 0 15px 0; font-weight: 600; color: #1E2E57;">${labels[locale].availableSlots}:</p>
+            ${timeSlotsHtml}
+          </div>
+          `
+              : ''
+          }
+
+          <p style="color: #4b5563; font-size: 16px; margin-bottom: 25px;">
+            <strong>${labels[locale].validUntil}:</strong> ${formattedExpiry}
+          </p>
+
+          ${schedulingMode === 'instant' ? '' : `<p style="color: #6b7280; font-size: 14px; margin-bottom: 25px;">${labels[locale].timeWindow}</p>`}
+
+          <!-- CTA Button -->
+          <div style="margin: 35px 0; text-align: center;">
+            <a href="${actionUrl}"
+               style="background: linear-gradient(135deg, #1E2E57 0%, #0A0E27 100%); color: #00F0FF; padding: 16px 40px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600; font-size: 16px; border: 2px solid #00F0FF;">
+              ${actionLabel}
+            </a>
+          </div>
+
+          <!-- Interview Link -->
+          <div style="background-color: #f0fdff; border-left: 4px solid #00F0FF; padding: 20px; margin-bottom: 25px;">
+            <p style="margin: 0 0 10px 0; color: #1E2E57; font-weight: 600;">
+              ${schedulingMode === 'instant' ? labels[locale].enterRoom : labels[locale].confirm}:
+            </p>
+            <p style="margin: 0; word-break: break-all;">
+              <a href="${actionUrl}" style="color: #2563eb;">${actionUrl}</a>
+            </p>
+          </div>
+
+          <!-- What You Need -->
+          <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px; margin: 25px 0;">
+            <h3 style="margin: 0 0 15px 0; color: #1E2E57; font-size: 16px; font-weight: 600;">${labels[locale].whatYouNeed}:</h3>
+            <ul style="color: #4b5563; margin: 0; padding-left: 20px; line-height: 1.8;">
+              <li>${labels[locale].needWebcam}</li>
+              <li>${labels[locale].needMicrophone}</li>
+              <li>${labels[locale].needQuiet}</li>
+              <li>${labels[locale].needBrowser}</li>
+            </ul>
+          </div>
+
+          <p style="color: #1f2937; font-size: 16px; margin-top: 25px;">${labels[locale].goodLuck}</p>
+
+          <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+            ${labels[locale].regards}<br/>
+            ${labels[locale].hiringTeam}
+          </p>
+
+          <p style="color: #9ca3af; font-size: 12px; margin-top: 20px;">
+            Contact: <a href="mailto:${contactEmail}" style="color: #2563eb;">${contactEmail}</a>
+          </p>
         </div>
-        `
-            : ''
-        }
 
-        <p style="margin: 0 0 16px 0;"><strong>${labels[locale].validUntil}:</strong> ${formattedExpiry}</p>
-        ${schedulingMode === 'instant' ? '' : `<p style="margin: 0 0 16px 0; color: #6b7280;">${labels[locale].timeWindow}</p>`}
-        <p style="margin: 24px 0;">
-          <a href="${actionUrl}" style="display: inline-block; padding: 12px 18px; background: #1E2E57; color: #00F0FF; text-decoration: none; border-radius: 8px; font-weight: 600;">
-            ${actionLabel}
-          </a>
-        </p>
-        <p style="margin: 0 0 12px 0; color: #6b7280;">${actionUrl}</p>
-        <p style="margin: 24px 0 0 0; color: #6b7280; font-size: 12px;">Contact: ${(copilotInterview as { interviewer_email?: string | null }).interviewer_email || 'hr@company.com'}</p>
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="color: #6b7280; font-size: 12px; margin: 0;">
+            © ${new Date().getFullYear()} Foundire. All rights reserved.
+          </p>
+        </div>
       </div>
     `
 
     const timeInfoText = formattedScheduledTime ? `${labels[locale].scheduledTime}: ${formattedScheduledTime}` : ''
     const slotsInfoText = timeSlotsText ? `${labels[locale].availableSlots}:\n${timeSlotsText}` : ''
     const timeWindowText = schedulingMode === 'instant' ? '' : labels[locale].timeWindow
-    const contactEmail = (copilotInterview as { interviewer_email?: string | null }).interviewer_email || 'hr@company.com'
 
     const text = `
+================================
+Foundire - ${labels[locale].tagline}
+================================
+
 ${company.name}
 
 ${greetings[locale]}
@@ -340,7 +458,20 @@ ${timeWindowText}
 
 ${actionLabel}: ${actionUrl}
 
+${labels[locale].whatYouNeed}:
+- ${labels[locale].needWebcam}
+- ${labels[locale].needMicrophone}
+- ${labels[locale].needQuiet}
+- ${labels[locale].needBrowser}
+
+${labels[locale].goodLuck}
+
+${labels[locale].regards}
+${labels[locale].hiringTeam}
+
 Contact: ${contactEmail}
+
+© ${new Date().getFullYear()} Foundire. All rights reserved.
     `
 
     const smtpReady = Boolean(
