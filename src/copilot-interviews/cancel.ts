@@ -2,7 +2,7 @@ import { createAdminClient } from '../supabase/admin'
 import { deleteRoomForRegion } from '../livekit/rooms'
 import type { LiveKitRegion } from '../livekit/geo-routing'
 import { getMailerSenderEmail, getTransporter } from '../email/transporter'
-import { asRecord, getOptionalString } from '../utils/parse'
+import { asRecord, getOptionalString, getBoolean } from '../utils/parse'
 
 function detectLocale(input: string | undefined): 'en' | 'zh' | 'es' | 'fr' {
   const value = (input || '').toLowerCase()
@@ -26,6 +26,7 @@ export async function handleCancelCopilotInterview(
     const cancelledBy = getOptionalString(record, 'cancelledBy') as 'interviewer' | 'candidate' | undefined
     const userId = getOptionalString(record, 'userId')
     const locale = detectLocale(getOptionalString(record, 'locale') || getOptionalString(record, 'acceptLanguage'))
+    const sendEmail = getBoolean(record, 'sendEmail') ?? true
 
     if (cancelledBy !== 'interviewer' && cancelledBy !== 'candidate') {
       return { status: 400, body: { success: false, error: 'cancelledBy must be interviewer or candidate' } }
@@ -123,7 +124,7 @@ export async function handleCancelCopilotInterview(
 
     const smtpReady = Boolean(process.env.SMTP_ADDRESS && process.env.SMTP_USERNAME && process.env.SMTP_PASSWORD && process.env.MAILER_SENDER_EMAIL)
     const candidateEmail = interview.candidate_email || interview.candidates?.email || null
-    if (smtpReady && candidateEmail && interview.jobs?.title && interview.companies?.name) {
+    if (sendEmail && smtpReady && candidateEmail && interview.jobs?.title && interview.companies?.name) {
       const companyName = interview.companies.name
       const jobTitle = interview.jobs.title
       const candidateName = interview.candidates?.name || 'Candidate'

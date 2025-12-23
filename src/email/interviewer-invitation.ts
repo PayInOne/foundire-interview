@@ -39,7 +39,7 @@ export async function sendInterviewerInvitationEmail({
       subject: `You're invited to interview ${candidateName} for ${jobTitle}`,
       title: 'Interview Invitation',
       greeting: `Hi ${interviewerName},`,
-      inviteText: `${invitedBy} has invited you to join an AI-Assisted Video Interview as a co-interviewer.`,
+      inviteText: `${invitedBy} has invited you to join a Live Video Interview as a co-interviewer.`,
       candidateLabel: 'Candidate',
       positionLabel: 'Position',
       scheduledLabel: 'Created',
@@ -53,7 +53,7 @@ export async function sendInterviewerInvitationEmail({
       subject: `您被邀请参加 ${candidateName} 的 ${jobTitle} 面试`,
       title: '面试邀请',
       greeting: `${interviewerName}，您好！`,
-      inviteText: `${invitedBy} 邀请您作为面试官加入一场 AI 辅助视频面试。`,
+      inviteText: `${invitedBy} 邀请您作为面试官加入一场真人视频面试。`,
       candidateLabel: '候选人',
       positionLabel: '职位',
       scheduledLabel: '创建时间',
@@ -67,7 +67,7 @@ export async function sendInterviewerInvitationEmail({
       subject: `Has sido invitado a entrevistar a ${candidateName} para ${jobTitle}`,
       title: 'Invitación a Entrevista',
       greeting: `Hola ${interviewerName},`,
-      inviteText: `${invitedBy} te ha invitado a unirte a una Entrevista de Video con Asistencia de IA como co-entrevistador.`,
+      inviteText: `${invitedBy} te ha invitado a unirte a una Entrevista de Video en Vivo como co-entrevistador.`,
       candidateLabel: 'Candidato',
       positionLabel: 'Puesto',
       scheduledLabel: 'Creado',
@@ -81,7 +81,7 @@ export async function sendInterviewerInvitationEmail({
       subject: `Vous êtes invité à interviewer ${candidateName} pour ${jobTitle}`,
       title: 'Invitation à un Entretien',
       greeting: `Bonjour ${interviewerName},`,
-      inviteText: `${invitedBy} vous a invité à rejoindre un Entretien Vidéo Assisté par IA en tant que co-recruteur.`,
+      inviteText: `${invitedBy} vous a invité à rejoindre un Entretien Vidéo en Direct en tant que co-recruteur.`,
       candidateLabel: 'Candidat',
       positionLabel: 'Poste',
       scheduledLabel: 'Créé',
@@ -104,7 +104,7 @@ export async function sendInterviewerInvitationEmail({
           </span>
         </div>
         <p style="color: #00F0FF; font-size: 13px; letter-spacing: 2px; margin: 0; font-weight: 600; opacity: 0.9;">
-          AI-ASSISTED VIDEO INTERVIEW
+          LIVE VIDEO INTERVIEW
         </p>
       </div>
 
