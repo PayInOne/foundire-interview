@@ -520,7 +520,7 @@ export async function handleCheckMissedInterviews(): Promise<CheckMissedResponse
 
     const { data: missedInterviews, error } = await adminSupabase
       .from('copilot_interviews')
-      .select('id, scheduled_at, room_status')
+      .select('id, interview_id, candidate_id, scheduled_at, room_status')
       .in('scheduling_mode', ['scheduled', 'candidate_choice'])
       .not('scheduled_at', 'is', null)
       .lt('scheduled_at', cutoffTime.toISOString())
@@ -537,22 +537,39 @@ export async function handleCheckMissedInterviews(): Promise<CheckMissedResponse
     let markedMissed = 0
 
     if (missedInterviews && missedInterviews.length > 0) {
-      for (const interview of missedInterviews) {
+      for (const record of missedInterviews) {
         try {
+          // Update copilot_interviews status
           const { error: updateError } = await adminSupabase
             .from('copilot_interviews')
             .update({ room_status: 'missed' })
-            .eq('id', interview.id)
+            .eq('id', record.id)
 
           if (updateError) {
-            console.error(`Failed to mark interview ${interview.id} as missed:`, updateError)
+            console.error(`Failed to mark interview ${record.id} as missed:`, updateError)
             continue
           }
 
-          console.log(`[Missed] Marked interview ${interview.id} as missed (scheduled: ${interview.scheduled_at})`)
+          // Also update the related interviews table
+          if (record.interview_id) {
+            await adminSupabase
+              .from('interviews')
+              .update({ status: 'cancelled' })
+              .eq('id', record.interview_id)
+          }
+
+          // Reset candidate status to pending
+          if (record.candidate_id) {
+            await adminSupabase
+              .from('candidates')
+              .update({ status: 'pending' })
+              .eq('id', record.candidate_id)
+          }
+
+          console.log(`[Missed] Marked interview ${record.id} as missed (scheduled: ${record.scheduled_at})`)
           markedMissed++
         } catch (err) {
-          console.error(`Error processing missed interview ${interview.id}:`, err)
+          console.error(`Error processing missed interview ${record.id}:`, err)
         }
       }
     }
