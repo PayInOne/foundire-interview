@@ -89,46 +89,123 @@ export async function handleStartCoseatSession(body: unknown): Promise<CoseatSes
 
     const now = new Date().toISOString()
 
-    const { data: interview, error: interviewError } = await adminSupabase
+    // 查找已有的预约面试（通过 schedule 创建的，状态为 pending/scheduled）
+    const { data: existingInterview } = await adminSupabase
       .from('interviews')
-      .insert({
-        candidate_id: candidateId,
-        job_id: jobId,
-        company_id: companyId,
-        interview_mode: INTERVIEW_MODES.ASSISTED_VOICE,
-        status: 'in-progress',
-        transcript: toJson([]),
-        started_at: now,
-        interview_duration: finalInterviewDuration,
-      })
-      .select()
+      .select('id, interview_duration')
+      .eq('candidate_id', candidateId)
+      .eq('job_id', jobId)
+      .eq('interview_mode', INTERVIEW_MODES.ASSISTED_VOICE)
+      .in('status', ['pending', 'scheduled'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single()
 
-    if (interviewError || !interview) {
-      console.error('Failed to create interview:', interviewError)
-      return { status: 500, body: { success: false, error: 'Failed to create interview' } }
+    let interview: { id: string; interview_duration?: number } | null = null
+
+    if (existingInterview) {
+      // 使用已有的预约面试，更新状态
+      const { data: updatedInterview, error: updateError } = await adminSupabase
+        .from('interviews')
+        .update({
+          status: 'in-progress',
+          started_at: now,
+        })
+        .eq('id', (existingInterview as { id: string }).id)
+        .select('id, interview_duration')
+        .single()
+
+      if (updateError || !updatedInterview) {
+        console.error('Failed to update existing interview:', updateError)
+        return { status: 500, body: { success: false, error: 'Failed to start interview' } }
+      }
+      interview = updatedInterview as { id: string; interview_duration?: number }
+    } else {
+      // 没有预约，创建新的面试
+      const { data: newInterview, error: interviewError } = await adminSupabase
+        .from('interviews')
+        .insert({
+          candidate_id: candidateId,
+          job_id: jobId,
+          company_id: companyId,
+          interview_mode: INTERVIEW_MODES.ASSISTED_VOICE,
+          status: 'in-progress',
+          transcript: toJson([]),
+          started_at: now,
+          interview_duration: finalInterviewDuration,
+        })
+        .select('id, interview_duration')
+        .single()
+
+      if (interviewError || !newInterview) {
+        console.error('Failed to create interview:', interviewError)
+        return { status: 500, body: { success: false, error: 'Failed to create interview' } }
+      }
+      interview = newInterview as { id: string; interview_duration?: number }
     }
 
-    const { data: coseatInterview, error: coseatError } = await adminSupabase
+    if (!interview) {
+      return { status: 500, body: { success: false, error: 'Failed to get interview' } }
+    }
+
+    // 查找已有的 coseat_interviews 记录（schedule 创建的）
+    const { data: existingCoseat } = await adminSupabase
       .from('coseat_interviews')
-      .insert({
-        interview_id: (interview as { id: string }).id,
-        company_id: companyId,
-        interviewer_id: userId,
-        candidate_id: candidateId,
-        job_id: jobId,
-        session_status: 'active',
-        started_at: now,
-        ai_enabled: true,
-        transcript_count: 0,
-      })
-      .select()
+      .select('id')
+      .eq('interview_id', interview.id)
       .single()
 
-    if (coseatError || !coseatInterview) {
-      console.error('Failed to create coseat interview:', coseatError)
-      await adminSupabase.from('interviews').delete().eq('id', (interview as { id: string }).id)
-      return { status: 500, body: { success: false, error: 'Failed to create CoSeat session' } }
+    let coseatInterview: Record<string, unknown> | null = null
+
+    if (existingCoseat) {
+      // 更新已有的 coseat_interviews 记录
+      const { data: updatedCoseat, error: updateError } = await adminSupabase
+        .from('coseat_interviews')
+        .update({
+          session_status: 'active',
+          started_at: now,
+          interviewer_id: userId,
+        })
+        .eq('id', (existingCoseat as { id: string }).id)
+        .select()
+        .single()
+
+      if (updateError || !updatedCoseat) {
+        console.error('Failed to update coseat interview:', updateError)
+        return { status: 500, body: { success: false, error: 'Failed to start CoSeat session' } }
+      }
+      coseatInterview = updatedCoseat as Record<string, unknown>
+    } else {
+      // 创建新的 coseat_interviews 记录
+      const { data: newCoseat, error: coseatError } = await adminSupabase
+        .from('coseat_interviews')
+        .insert({
+          interview_id: interview.id,
+          company_id: companyId,
+          interviewer_id: userId,
+          candidate_id: candidateId,
+          job_id: jobId,
+          session_status: 'active',
+          started_at: now,
+          ai_enabled: true,
+          transcript_count: 0,
+        })
+        .select()
+        .single()
+
+      if (coseatError || !newCoseat) {
+        console.error('Failed to create coseat interview:', coseatError)
+        // 如果是新创建的面试，删除它
+        if (!existingInterview) {
+          await adminSupabase.from('interviews').delete().eq('id', interview.id)
+        }
+        return { status: 500, body: { success: false, error: 'Failed to create CoSeat session' } }
+      }
+      coseatInterview = newCoseat as Record<string, unknown>
+    }
+
+    if (!coseatInterview) {
+      return { status: 500, body: { success: false, error: 'Failed to get CoSeat session' } }
     }
 
     await adminSupabase.from('candidates').update({ status: 'interviewing' }).eq('id', candidateId)
