@@ -4,6 +4,11 @@ import { INTERVIEW_MODES } from '../interview/modes'
 import { toJson } from '../supabase/json'
 import { asRecord, getOptionalString, getString } from '../utils/parse'
 import { uploadToR2 } from '../cloudflare/r2'
+import {
+  DEFAULT_INTERVIEW_DURATION_MINUTES,
+  isAllowedInterviewDurationMinutes,
+  normalizeInterviewDurationMinutes,
+} from '../interviews/constants'
 
 type CoSeatSessionStatus = 'pending' | 'preparing' | 'active' | 'completed' | 'cancelled'
 
@@ -21,6 +26,7 @@ export async function handleStartCoseatSession(body: unknown): Promise<CoseatSes
     const userId = getString(record, 'userId')
     const candidateId = getString(record, 'candidateId')
     const jobId = getString(record, 'jobId')
+    const interviewDuration = record.interviewDuration
 
     if (!userId) {
       return { status: 401, body: { success: false, error: 'Unauthorized' } }
@@ -29,6 +35,23 @@ export async function handleStartCoseatSession(body: unknown): Promise<CoseatSes
     if (!candidateId || !jobId) {
       return { status: 400, body: { success: false, error: 'candidateId and jobId are required' } }
     }
+
+    // 验证面试时长
+    if (
+      interviewDuration !== undefined &&
+      interviewDuration !== null &&
+      !isAllowedInterviewDurationMinutes(interviewDuration)
+    ) {
+      return {
+        status: 400,
+        body: { success: false, error: 'Interview duration must be 15, 30, 45, or 60 minutes' },
+      }
+    }
+
+    const finalInterviewDuration =
+      interviewDuration !== undefined && interviewDuration !== null
+        ? normalizeInterviewDurationMinutes(interviewDuration)
+        : DEFAULT_INTERVIEW_DURATION_MINUTES
 
     const adminSupabase = createAdminClient()
 
@@ -76,6 +99,7 @@ export async function handleStartCoseatSession(body: unknown): Promise<CoseatSes
         status: 'in-progress',
         transcript: toJson([]),
         started_at: now,
+        interview_duration: finalInterviewDuration,
       })
       .select()
       .single()
