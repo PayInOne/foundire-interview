@@ -79,7 +79,7 @@ export async function handleExtendCoseatInterview(
       return { status: 403, body: { error: 'You are not the interviewer for this session' } }
     }
 
-    const allowedStatuses = ['in_progress']
+    const allowedStatuses = ['active']
     if (!allowedStatuses.includes(meta.session_status ?? '')) {
       return { status: 409, body: { error: `Cannot extend interview in status: ${meta.session_status}` } }
     }
