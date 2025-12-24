@@ -606,7 +606,8 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
       if (method === 'GET' && pathname === '/internal/coseat/schedule') {
         const candidateId = url.searchParams.get('candidateId') || ''
         const userId = url.searchParams.get('userId') || ''
-        const response = await handleGetActiveCoseatInterview(candidateId, userId)
+        const includeAll = url.searchParams.get('include_all') === 'true'
+        const response = await handleGetActiveCoseatInterview(candidateId, userId, includeAll)
         sendJson(res, response.status, response.body)
         return
       }

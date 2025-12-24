@@ -170,7 +170,8 @@ export type CoseatScheduleGetResponse =
 
 export async function handleGetActiveCoseatInterview(
   candidateId: string,
-  userId: string
+  userId: string,
+  includeAll: boolean = false
 ): Promise<CoseatScheduleGetResponse> {
   try {
     if (!candidateId) {
@@ -205,11 +206,17 @@ export async function handleGetActiveCoseatInterview(
       return { status: 404, body: { success: false, error: 'Candidate not found or access denied' } }
     }
 
-    const { data, error } = await adminSupabase
+    let query = adminSupabase
       .from('coseat_interviews')
       .select('id, interview_id, interviewer_id, session_status, created_at, started_at, ended_at')
       .eq('candidate_id', candidateId)
-      .not('session_status', 'in', '(completed,cancelled)')
+
+    // 如果不包含所有状态，过滤掉 cancelled（但保留 completed 以显示完成状态）
+    if (!includeAll) {
+      query = query.not('session_status', 'eq', 'cancelled')
+    }
+
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(1)
 
