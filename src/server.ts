@@ -50,6 +50,7 @@ import { handleGetCoseatSuggestions, handleGenerateCoseatSuggestions } from './c
 import { handleStartCoseatSession, handleEndCoseatSession, handleUploadCoseatRecording } from './coseat/session'
 import { handleGetCoseatAudio } from './coseat/audio'
 import { handleGetCoseatProfile, handlePostCoseatProfile, handleDeleteCoseatProfile } from './coseat/profile'
+import { handleExtendCoseatInterview } from './coseat/extend'
 import { handleAzureSpeechToken } from './azure/speech-token'
 import { handleAzureTts } from './azure/tts'
 import { handleAzureSpeechRecognize } from './azure/speech-recognize'
@@ -928,6 +929,13 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
 
         if (segments.length === 4 && segments[3] === 'heartbeat' && method === 'POST') {
           const response = await handleCoseatHeartbeat(coseatInterviewId)
+          sendJson(res, response.status, response.body)
+          return
+        }
+
+        if (segments.length === 4 && segments[3] === 'extend' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleExtendCoseatInterview(coseatInterviewId, body)
           sendJson(res, response.status, response.body)
           return
         }
