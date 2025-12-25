@@ -8,6 +8,7 @@ export interface SendInterviewerInvitationParams {
   invitedBy: string
   interviewerUrl: string
   scheduledAt?: string | null
+  interviewerTimezone?: string | null
   locale?: string
 }
 
@@ -19,8 +20,13 @@ export async function sendInterviewerInvitationEmail({
   invitedBy,
   interviewerUrl,
   scheduledAt,
+  interviewerTimezone,
   locale = 'en',
 }: SendInterviewerInvitationParams) {
+  const localeKey =
+    locale?.startsWith('zh') ? 'zh' : locale?.startsWith('es') ? 'es' : locale?.startsWith('fr') ? 'fr' : 'en'
+  const localeTag =
+    localeKey === 'zh' ? 'zh-CN' : localeKey === 'es' ? 'es-ES' : localeKey === 'fr' ? 'fr-FR' : 'en-US'
   const tbdLabels: Record<string, string> = {
     zh: '待确认',
     en: 'To be confirmed',
@@ -28,11 +34,12 @@ export async function sendInterviewerInvitationEmail({
     fr: 'À confirmer',
   }
   const formattedDate = scheduledAt
-    ? new Date(scheduledAt).toLocaleString(locale === 'zh' ? 'zh-CN' : locale, {
+    ? new Date(scheduledAt).toLocaleString(localeTag, {
         dateStyle: 'medium',
         timeStyle: 'short',
+        timeZone: interviewerTimezone || undefined,
       })
-    : (tbdLabels[locale] || tbdLabels.en)
+    : (tbdLabels[localeKey] || tbdLabels.en)
 
   const content = {
     en: {
@@ -93,7 +100,7 @@ export async function sendInterviewerInvitationEmail({
     },
   }
 
-  const t = (content as Record<string, typeof content.en>)[locale] || content.en
+  const t = (content as Record<string, typeof content.en>)[localeKey] || content.en
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">

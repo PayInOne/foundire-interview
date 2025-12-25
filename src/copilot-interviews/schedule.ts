@@ -400,6 +400,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
             invitedBy: creatorName,
             interviewerUrl,
             scheduledAt: scheduledAtForEmail,
+            interviewerTimezone: interviewerTimezone || null,
             locale,
           })
         })

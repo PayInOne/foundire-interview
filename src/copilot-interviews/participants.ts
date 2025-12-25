@@ -31,7 +31,7 @@ export async function handleAddCopilotParticipants(
 
     const { data: interview, error: interviewError } = await adminSupabase
       .from('copilot_interviews')
-      .select('id, company_id, candidate_id, job_id, room_status, scheduled_at')
+      .select('id, company_id, candidate_id, job_id, room_status, scheduled_at, interviewer_timezone')
       .eq('id', copilotInterviewId)
       .single()
 
@@ -45,6 +45,7 @@ export async function handleAddCopilotParticipants(
       job_id: string
       room_status: string
       scheduled_at: string | null
+      interviewer_timezone: string | null
     }
 
     if (interviewMeta.room_status === 'completed' || interviewMeta.room_status === 'cancelled') {
@@ -156,6 +157,7 @@ export async function handleAddCopilotParticipants(
           invitedBy: resolvedInviterName || 'A colleague',
           interviewerUrl,
           scheduledAt,
+          interviewerTimezone: interviewMeta.interviewer_timezone,
           locale,
         })
       })
