@@ -1,3 +1,5 @@
+import { getAppPublicUrl } from '../config'
+
 const EN_MESSAGES = {
   email: {
     interviewReport: {
@@ -89,7 +91,7 @@ export function t(messages: Record<string, unknown>, key: string, params?: Recor
 
 export function getUnsubscribeFooter(messages: Messages): { html: string; text: string } {
   const unsubscribe = messages.email.unsubscribe
-  const baseUrl = process.env.APP_PUBLIC_URL || 'https://foundire.com/app'
+  const baseUrl = getAppPublicUrl()
   const settingsUrl = `${baseUrl}/settings`
 
   const html = `
