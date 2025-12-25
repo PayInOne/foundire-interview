@@ -89,7 +89,7 @@ export function t(messages: Record<string, unknown>, key: string, params?: Recor
 
 export function getUnsubscribeFooter(messages: Messages): { html: string; text: string } {
   const unsubscribe = messages.email.unsubscribe
-  const baseUrl = process.env.APP_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.foundire.com'
+  const baseUrl = process.env.APP_PUBLIC_URL || 'https://foundire.com/app'
   const settingsUrl = `${baseUrl}/settings`
 
   const html = `
@@ -112,4 +112,3 @@ ${unsubscribe.managePreferences} ${settingsUrl}
 
   return { html, text }
 }
-
