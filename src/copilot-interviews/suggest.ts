@@ -5,10 +5,41 @@ import { AISuggestionAdapter, type AISuggestion } from '../interview/ai-assisted
 import type { LiveKitRegion } from '../livekit/geo-routing'
 import { broadcastSuggestionsToInterviewers } from './suggestion-pusher'
 
-function generateContentHash(suggestion: { type: string; title: string }): string {
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeStringArray(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return []
+  const normalized = value
+    .map((v) => normalizeText(v))
+    .filter(Boolean)
+    .map((v) => v.toLowerCase())
+  return normalized.slice(0, limit)
+}
+
+function generateContentHash(suggestion: {
+  type: string
+  title: string
+  content?: string
+  suggestedQuestions?: string[]
+  relatedSkills?: string[]
+}): string {
+  // Warning 类（回答质量偏低）容易刷屏：保持更强去重（只按 type + title）
+  if (suggestion.type === 'warning') {
+    const content = JSON.stringify({
+      type: suggestion.type,
+      title: suggestion.title.trim().toLowerCase(),
+    })
+    return crypto.createHash('md5').update(content).digest('hex')
+  }
+
   const content = JSON.stringify({
     type: suggestion.type,
     title: suggestion.title.trim().toLowerCase(),
+    content: normalizeText(suggestion.content).toLowerCase(),
+    suggestedQuestions: (suggestion.suggestedQuestions ?? []).map((q) => q.trim().toLowerCase()).filter(Boolean).slice(0, 5),
+    relatedSkills: (suggestion.relatedSkills ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean).slice(0, 10),
   })
   return crypto.createHash('md5').update(content).digest('hex')
 }
@@ -43,9 +74,15 @@ async function checkDuplicateSuggestion(
     for (const existing of data) {
       const existingContent = asRecord((existing as { content?: unknown }).content) ?? {}
       const existingTitle = typeof existingContent.title === 'string' ? existingContent.title : ''
+      const existingText = typeof existingContent.content === 'string' ? existingContent.content : ''
+      const existingSuggestedQuestions = normalizeStringArray(existingContent.suggestedQuestions, 5)
+      const existingRelatedSkills = normalizeStringArray(existingContent.relatedSkills, 10)
       const existingHash = generateContentHash({
         type: reverseTypeMap[(existing as { suggestion_type: string }).suggestion_type] || (existing as { suggestion_type: string }).suggestion_type,
         title: existingTitle,
+        content: existingText,
+        suggestedQuestions: existingSuggestedQuestions,
+        relatedSkills: existingRelatedSkills,
       })
 
       if (existingHash === contentHash) {
@@ -63,6 +100,82 @@ async function checkDuplicateSuggestion(
 export type CopilotSuggestPostResponse =
   | { status: 200; body: Record<string, unknown> }
   | { status: 400 | 404 | 500; body: Record<string, unknown> }
+
+type RawTranscriptMessage = {
+  speaker: string
+  text: string
+  timestamp: string
+  confidence?: number
+}
+
+function normalizeTranscriptMessages(transcripts: unknown[]): RawTranscriptMessage[] {
+  const normalized: RawTranscriptMessage[] = []
+
+  for (const entry of transcripts) {
+    const messageRecord = asRecord(entry)
+    if (!messageRecord) continue
+
+    const speaker = typeof messageRecord.speaker === 'string' ? messageRecord.speaker : 'candidate'
+    const text = typeof messageRecord.text === 'string' ? messageRecord.text.trim() : ''
+    if (!text) continue
+
+    const rawTimestamp = messageRecord.timestamp
+    const timestamp = typeof rawTimestamp === 'string' && rawTimestamp ? new Date(rawTimestamp).toISOString() : new Date().toISOString()
+
+    const confidenceRaw = messageRecord.confidence
+    const confidence = typeof confidenceRaw === 'number' && Number.isFinite(confidenceRaw) ? confidenceRaw : undefined
+
+    // 过滤明显噪声：极短且低置信度（常见于ASR断句/口头禅）
+    if (confidence !== undefined && confidence < 0.35 && text.length < 20) continue
+    if (text.length < 2) continue
+
+    normalized.push({ speaker, text, timestamp, ...(confidence !== undefined ? { confidence } : {}) })
+  }
+
+  return normalized
+}
+
+function mergeConsecutiveBySpeaker(messages: RawTranscriptMessage[]): RawTranscriptMessage[] {
+  const merged: RawTranscriptMessage[] = []
+  for (const message of messages) {
+    const last = merged[merged.length - 1]
+    if (last && last.speaker === message.speaker) {
+      last.text = `${last.text} ${message.text}`.trim()
+      last.timestamp = message.timestamp
+      last.confidence =
+        last.confidence !== undefined && message.confidence !== undefined
+          ? (last.confidence + message.confidence) / 2
+          : (last.confidence ?? message.confidence)
+      continue
+    }
+    merged.push({ ...message })
+  }
+  return merged
+}
+
+function extractRequiredSkills(questionsRaw: unknown): string[] {
+  if (!Array.isArray(questionsRaw)) return []
+
+  const skills: string[] = []
+  for (const q of questionsRaw) {
+    if (typeof q === 'string') {
+      const trimmed = q.trim()
+      if (trimmed) skills.push(trimmed)
+      continue
+    }
+
+    const questionRecord = asRecord(q)
+    if (!questionRecord) continue
+    const skill = questionRecord.skill
+    const topic = questionRecord.topic
+    const value = typeof skill === 'string' ? skill : typeof topic === 'string' ? topic : ''
+    const trimmed = value.trim()
+    if (trimmed) skills.push(trimmed)
+  }
+
+  // 去重 + 限制长度，避免提示词过长
+  return Array.from(new Set(skills)).slice(0, 20)
+}
 
 export async function handleGenerateCopilotSuggestions(
   copilotInterviewId: string,
@@ -127,17 +240,7 @@ export async function handleGenerateCopilotSuggestions(
     const jobDescription = typeof jobRecord.description === 'string' ? jobRecord.description : ''
 
     const questionsRaw = jobRecord.questions
-    const questions = Array.isArray(questionsRaw) ? questionsRaw : []
-    const requiredSkills = questions
-      .map((q) => {
-        const questionRecord = asRecord(q)
-        if (!questionRecord) return ''
-        const skill = questionRecord.skill
-        const topic = questionRecord.topic
-        const value = typeof skill === 'string' ? skill : typeof topic === 'string' ? topic : ''
-        return value.trim()
-      })
-      .filter(Boolean)
+    const requiredSkills = extractRequiredSkills(questionsRaw)
 
     const { data: interviewData } = await adminSupabase
       .from('interviews')
@@ -148,21 +251,8 @@ export async function handleGenerateCopilotSuggestions(
     const transcriptRaw = (interviewData as { transcript?: unknown } | null)?.transcript
     const transcripts = Array.isArray(transcriptRaw) ? transcriptRaw : []
 
-    const conversationHistory = transcripts
-      .map((t) => {
-        const messageRecord = asRecord(t)
-        if (!messageRecord) return null
-
-        const speaker = typeof messageRecord.speaker === 'string' ? messageRecord.speaker : 'candidate'
-        const text = typeof messageRecord.text === 'string' ? messageRecord.text : ''
-        if (!text) return null
-
-        const rawTimestamp = messageRecord.timestamp
-        const timestamp = typeof rawTimestamp === 'string' ? new Date(rawTimestamp).toISOString() : new Date().toISOString()
-
-        return { speaker, text, timestamp }
-      })
-      .filter((t): t is { speaker: string; text: string; timestamp: string } => t !== null)
+    const conversationHistory = mergeConsecutiveBySpeaker(normalizeTranscriptMessages(transcripts))
+      .map((m) => ({ speaker: m.speaker, text: m.text, timestamp: m.timestamp }))
 
     const startTime = copilot.created_at ? new Date(copilot.created_at).getTime() : Date.now()
     const interviewDuration = Math.floor((Date.now() - startTime) / 60000)
@@ -191,10 +281,17 @@ export async function handleGenerateCopilotSuggestions(
     }
 
     const suggestionsToSave: Array<Record<string, unknown>> = []
+    const uniqueSuggestions: AISuggestion[] = []
     let duplicateCount = 0
 
     for (const s of suggestions) {
-      const contentHash = generateContentHash(s)
+      const contentHash = generateContentHash({
+        type: s.type,
+        title: s.title,
+        content: s.content,
+        suggestedQuestions: s.suggestedQuestions,
+        relatedSkills: s.relatedSkills,
+      })
       const isDuplicate = await checkDuplicateSuggestion(adminSupabase, copilotInterviewId, contentHash)
       if (isDuplicate) {
         duplicateCount++
@@ -212,6 +309,7 @@ export async function handleGenerateCopilotSuggestions(
           relatedSkills: s.relatedSkills || [],
         },
       })
+      uniqueSuggestions.push(s)
     }
 
     if (suggestionsToSave.length > 0) {
@@ -221,10 +319,19 @@ export async function handleGenerateCopilotSuggestions(
       }
     }
 
-    if (copilot.livekit_room_name) {
+    // 记录最后一次生成时间（用于后续节流/分析）
+    await adminSupabase
+      .from('copilot_interviews')
+      .update({ ai_last_suggestion_at: new Date().toISOString() })
+      .eq('id', copilotInterviewId)
+      .then(({ error }) => {
+        if (error) console.error('Failed to update ai_last_suggestion_at:', error)
+      })
+
+    if (copilot.livekit_room_name && uniqueSuggestions.length > 0) {
       await broadcastSuggestionsToInterviewers({
         roomName: copilot.livekit_room_name,
-        suggestions,
+        suggestions: uniqueSuggestions,
         region: (copilot.livekit_region as LiveKitRegion | null) ?? null,
       })
     }
@@ -233,7 +340,7 @@ export async function handleGenerateCopilotSuggestions(
       status: 200,
       body: {
         success: true,
-        data: { suggestions, savedCount: suggestionsToSave.length, duplicateCount },
+        data: { suggestions: uniqueSuggestions, savedCount: suggestionsToSave.length, duplicateCount },
       },
     }
   } catch (error) {
@@ -249,13 +356,16 @@ export type CopilotSuggestGetResponse =
 export async function handleGetCopilotSuggestions(copilotInterviewId: string): Promise<CopilotSuggestGetResponse> {
   try {
     const adminSupabase = createAdminClient()
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
 
     const { data, error } = await adminSupabase
       .from('ai_suggestions')
       .select('*')
       .eq('ai_interview_id', copilotInterviewId)
+      .is('dismissed_at', null)
+      .gte('created_at', oneHourAgo)
       .order('created_at', { ascending: true })
-      .limit(20)
+      .limit(50)
 
     if (error) {
       return { status: 500, body: { success: false, error: error.message } }

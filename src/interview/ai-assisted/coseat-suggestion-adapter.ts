@@ -5,12 +5,6 @@ import { formatMessage, getAiSuggestionMessages, type SupportedLocale } from './
 import type { AISuggestion } from './suggestion-adapter'
 
 export class CoseatSuggestionAdapter {
-  private skillTracker: SkillTracker
-
-  constructor() {
-    this.skillTracker = new SkillTracker('assisted_voice')
-  }
-
   async generateSuggestions(params: {
     conversationHistory: ConversationMessage[]
     jobTitle: string
@@ -32,7 +26,8 @@ export class CoseatSuggestionAdapter {
         topicsCovered: [],
         language: params.language,
       },
-      skills: this.skillTracker.buildContext(params.requiredSkills),
+      // CoSeat 目前没有技能进度持久化：每次调用重新构建上下文，避免跨面试污染
+      skills: new SkillTracker('assisted_voice').buildContext(params.requiredSkills),
       timing: {
         remainingMinutes: 30,
         durationMinutes: 0,
@@ -43,19 +38,25 @@ export class CoseatSuggestionAdapter {
       },
     }
 
-    const analysis = await conversationAnalyzer.quickAnalyze(context, 5)
+    const analysisWindowMessages = 8
+    const analysis = await conversationAnalyzer.quickAnalyze(context, analysisWindowMessages)
 
-    for (const skill of analysis.skillsCoverage.discussedSkills) {
-      await this.skillTracker.markSkillEvaluated(skill, {
-        quality: analysis.quality.score >= 7 ? 'deep' : 'shallow',
-        timestamp: new Date().toISOString(),
-      })
-    }
+    const recentWindow = context.conversation.history.slice(-analysisWindowMessages)
+    const recentCandidateChars = recentWindow
+      .filter((m) => m.speaker === 'candidate')
+      .map((m) => m.text.trim())
+      .filter(Boolean)
+      .join(' ')
+      .length
 
-    return this.convertToSuggestions(analysis, params.language).slice(0, 3)
+    return this.convertToSuggestions(analysis, params.language, { recentCandidateChars }).slice(0, 3)
   }
 
-  private convertToSuggestions(analysis: AnalysisResult, language: SupportedLocale): AISuggestion[] {
+  private convertToSuggestions(
+    analysis: AnalysisResult,
+    language: SupportedLocale,
+    signals?: { recentCandidateChars?: number }
+  ): AISuggestion[] {
     const suggestions: AISuggestion[] = []
     const l = getAiSuggestionMessages(language)
 
@@ -96,6 +97,9 @@ export class CoseatSuggestionAdapter {
     }
 
     if (analysis.quality.score <= 4) {
+      const candidateChars = signals?.recentCandidateChars ?? 0
+      if (candidateChars < 30) return suggestions
+
       suggestions.push({
         type: 'warning',
         priority: 'high',
@@ -110,4 +114,3 @@ export class CoseatSuggestionAdapter {
 }
 
 export const coseatSuggestionAdapter = new CoseatSuggestionAdapter()
-

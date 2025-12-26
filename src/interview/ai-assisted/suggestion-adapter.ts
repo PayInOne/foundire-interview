@@ -15,12 +15,14 @@ export interface AISuggestion {
 
 export class AISuggestionAdapter {
   private skillTracker: SkillTracker
+  private hasLoadedSkillState = false
 
   constructor(
     requiredSkills: string[],
     aiInterviewId: string,
     private supabaseClient: SupabaseClient
   ) {
+    this.aiInterviewId = aiInterviewId
     this.skillTracker = new SkillTracker('assisted_video', async (skill, evaluation) => {
       await this.persistSkillEvaluation(aiInterviewId, skill, evaluation)
     })
@@ -28,6 +30,48 @@ export class AISuggestionAdapter {
     if (requiredSkills.length > 0) {
       // pre-warm context on initialization
       this.skillTracker.buildContext(requiredSkills)
+    }
+  }
+
+  private aiInterviewId: string
+
+  private async loadPersistedSkillState(): Promise<void> {
+    if (this.hasLoadedSkillState) return
+    this.hasLoadedSkillState = true
+
+    try {
+      const { data, error } = await this.supabaseClient
+        .from('skill_evaluation_progress')
+        .select('skill_name, evaluation_quality, evaluated_at, offset_seconds, evaluated')
+        .eq('ai_interview_id', this.aiInterviewId)
+        .eq('evaluated', true)
+        .limit(200)
+
+      if (error || !data) return
+
+      const state: Record<string, SkillEvaluation> = {}
+      for (const row of data as unknown as Array<{
+        skill_name?: unknown
+        evaluation_quality?: unknown
+        evaluated_at?: unknown
+        offset_seconds?: unknown
+        evaluated?: unknown
+      }>) {
+        const skill = typeof row.skill_name === 'string' ? row.skill_name.trim() : ''
+        if (!skill) continue
+
+        const quality = row.evaluation_quality === 'deep' ? 'deep' : 'shallow'
+        const timestamp = typeof row.evaluated_at === 'string' && row.evaluated_at ? row.evaluated_at : new Date().toISOString()
+        const offsetSeconds = typeof row.offset_seconds === 'number' && Number.isFinite(row.offset_seconds) ? row.offset_seconds : undefined
+
+        state[skill] = { quality, timestamp, ...(offsetSeconds !== undefined ? { offsetSeconds } : {}) }
+      }
+
+      if (Object.keys(state).length > 0) {
+        this.skillTracker.restoreState(state)
+      }
+    } catch (err) {
+      // ignore skill state load errors (best effort)
     }
   }
 
@@ -43,6 +87,8 @@ export class AISuggestionAdapter {
     candidateName?: string
     candidateResumeText?: string
   }): Promise<AISuggestion[]> {
+    await this.loadPersistedSkillState()
+
     const context: InterviewContext = {
       job: {
         title: params.jobTitle,
@@ -73,7 +119,8 @@ export class AISuggestionAdapter {
       },
     }
 
-    const analysis = await conversationAnalyzer.quickAnalyze(context, 5)
+    const analysisWindowMessages = 8
+    const analysis = await conversationAnalyzer.quickAnalyze(context, analysisWindowMessages)
 
     for (const skill of analysis.skillsCoverage.discussedSkills) {
       await this.skillTracker.markSkillEvaluated(skill, {
@@ -82,10 +129,26 @@ export class AISuggestionAdapter {
       })
     }
 
-    return this.convertToSuggestions(analysis, params.language)
+    const recentWindow = context.conversation.history.slice(-analysisWindowMessages)
+    const recentCandidateChars = recentWindow
+      .filter((m) => m.speaker === 'candidate')
+      .map((m) => m.text.trim())
+      .filter(Boolean)
+      .join(' ')
+      .length
+
+    return this.convertToSuggestions(analysis, params.language, {
+      recentCandidateChars,
+    })
   }
 
-  private convertToSuggestions(analysis: AnalysisResult, language: SupportedLocale): AISuggestion[] {
+  private convertToSuggestions(
+    analysis: AnalysisResult,
+    language: SupportedLocale,
+    signals?: {
+      recentCandidateChars?: number
+    }
+  ): AISuggestion[] {
     const suggestions: AISuggestion[] = []
     const l = getAiSuggestionMessages(language)
 
@@ -126,6 +189,10 @@ export class AISuggestionAdapter {
     }
 
     if (analysis.quality.score <= 4) {
+      // 避免 ASR 碎片/信息不足导致的“低质量”刷屏：候选人内容太少时不给 warning
+      const candidateChars = signals?.recentCandidateChars ?? 0
+      if (candidateChars < 30) return suggestions
+
       suggestions.push({
         type: 'warning',
         priority: 'high',
@@ -148,4 +215,3 @@ export class AISuggestionAdapter {
     })
   }
 }
-

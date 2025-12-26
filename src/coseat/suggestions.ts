@@ -52,6 +52,54 @@ const typeMapReverse: Record<string, string> = {
   insight: 'insight',
 }
 
+type RawTranscriptMessage = {
+  speaker: string
+  text: string
+  timestamp: string
+  confidence?: number
+}
+
+function normalizeTranscriptMessages(transcripts: unknown[]): RawTranscriptMessage[] {
+  const normalized: RawTranscriptMessage[] = []
+
+  for (const entry of transcripts) {
+    const record = asRecord(entry)
+    if (!record) continue
+
+    const speaker = typeof record.speaker === 'string' ? record.speaker : 'candidate'
+    const text = typeof record.text === 'string' ? record.text.trim() : ''
+    if (!text) continue
+
+    const timestamp = typeof record.timestamp === 'string' && record.timestamp ? record.timestamp : new Date().toISOString()
+    const confidence = typeof record.confidence === 'number' && Number.isFinite(record.confidence) ? record.confidence : undefined
+
+    if (confidence !== undefined && confidence < 0.35 && text.length < 20) continue
+    if (text.length < 2) continue
+
+    normalized.push({ speaker, text, timestamp, ...(confidence !== undefined ? { confidence } : {}) })
+  }
+
+  return normalized
+}
+
+function mergeConsecutiveBySpeaker(messages: RawTranscriptMessage[]): RawTranscriptMessage[] {
+  const merged: RawTranscriptMessage[] = []
+  for (const message of messages) {
+    const last = merged[merged.length - 1]
+    if (last && last.speaker === message.speaker) {
+      last.text = `${last.text} ${message.text}`.trim()
+      last.timestamp = message.timestamp
+      last.confidence =
+        last.confidence !== undefined && message.confidence !== undefined
+          ? (last.confidence + message.confidence) / 2
+          : (last.confidence ?? message.confidence)
+      continue
+    }
+    merged.push({ ...message })
+  }
+  return merged
+}
+
 export type CoseatSuggestionsGetResponse =
   | { status: 200; body: Record<string, unknown> }
   | { status: 500; body: Record<string, unknown> }
@@ -184,21 +232,8 @@ export async function handleGenerateCoseatSuggestions(
       return { status: 404, body: { success: false, error: 'Job not found for CoSeat interview' } }
     }
 
-    const conversationHistory: ConversationMessage[] = transcripts
-      .map((t) => {
-        const messageRecord = asRecord(t)
-        if (!messageRecord) return null
-
-        const speaker = typeof messageRecord.speaker === 'string' ? messageRecord.speaker : 'candidate'
-        const text = typeof messageRecord.text === 'string' ? messageRecord.text : ''
-        if (!text) return null
-
-        const timestamp =
-          typeof messageRecord.timestamp === 'string' ? messageRecord.timestamp : new Date().toISOString()
-
-        return { speaker, text, timestamp }
-      })
-      .filter((t): t is ConversationMessage => t !== null)
+    const conversationHistory: ConversationMessage[] = mergeConsecutiveBySpeaker(normalizeTranscriptMessages(transcripts))
+      .map((m) => ({ speaker: m.speaker, text: m.text, timestamp: m.timestamp }))
 
     const suggestions = await coseatSuggestionAdapter.generateSuggestions({
       conversationHistory,
@@ -252,4 +287,3 @@ export async function handleGenerateCoseatSuggestions(
     return { status: 500, body: { success: false, error: 'Internal server error' } }
   }
 }
-
