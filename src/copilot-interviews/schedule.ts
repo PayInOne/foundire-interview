@@ -413,6 +413,29 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
       })
     }
 
+    // Send email to the main interviewer (creator) as well
+    if (user.email) {
+      const jobTitle = (job as { title?: string | null }).title || 'Position'
+      const candidateName = (candidate as { name?: string | null }).name || 'Candidate'
+      const locale = (user.user_metadata?.locale as string | undefined) || 'en'
+
+      try {
+        await sendInterviewerInvitationEmail({
+          to: user.email,
+          interviewerName: creatorName,
+          candidateName,
+          jobTitle,
+          invitedBy: creatorName, // Self-created
+          interviewerUrl,
+          scheduledAt: scheduledAtForEmail,
+          interviewerTimezone: interviewerTimezone || null,
+          locale,
+        })
+      } catch (emailError) {
+        console.error(`[Copilot Schedule] Failed to send email to creator ${userId}:`, emailError)
+      }
+    }
+
     const { error: candidateStatusError } = await adminSupabase
       .from('candidates')
       .update({ status: 'interviewing', interview_mode: INTERVIEW_MODES.ASSISTED_VIDEO })
