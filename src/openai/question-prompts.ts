@@ -35,6 +35,7 @@ export const INTERVIEW_QUESTIONS_I18N: Record<
 Rules:
 - Focus strictly on professional skills and experience.
 - Be specific and verify real impact (projects, decisions, tradeoffs, metrics).
+- Do NOT fabricate resume details; only reference what is explicitly in the provided resume text.
 - Avoid political content (especially Chinese politics).`,
     systemWithoutResume: `You are an expert interviewer. Generate thoughtful interview questions based on the job requirements and company context.
 
@@ -58,12 +59,15 @@ Rules:
 2. Connect past experience to the role requirements.
 3. Include a mix of technical + behavioral questions.
 4. Progress from warm-up to deeper questions.
-5. Prefer open-ended questions that invite concrete examples.`,
+5. Prefer open-ended questions that invite concrete examples.
+6. At least 60% of questions should explicitly reference a concrete resume detail (project/company/role/tech) mentioned in the resume.
+7. Keep each question short and spoken (1-2 sentences), and avoid overly academic/quiz-style phrasing.`,
     questionGuidelinesWithoutResume: `Guidelines:
 1. Cover core technical skills, problem-solving, collaboration, and ownership.
 2. Include a mix of technical + behavioral questions.
 3. Progress from warm-up to deeper questions.
-4. Prefer open-ended questions that invite concrete examples.`,
+4. Prefer open-ended questions that invite concrete examples.
+5. Keep each question short and spoken (1-2 sentences), and avoid overly academic/quiz-style phrasing.`,
     jsonInstruction: 'Return only a JSON object with key "questions" as an array of strings.',
   },
   zh: {
@@ -78,6 +82,7 @@ Rules:
 规则：
 - 只关注专业能力与工作经验。
 - 问题要具体，用于验证真实性与深度（项目细节、取舍、指标、影响）。
+- 不要编造简历里不存在的经历或细节；只能引用简历文本中明确出现的信息。
 - 避免任何政治相关内容（尤其是中国政治）。`,
     systemWithoutResume: `你是一位资深面试官。请基于岗位要求和公司背景生成高质量面试问题。
 
@@ -101,12 +106,15 @@ Rules:
 2. 将过往经验与岗位要求建立关联。
 3. 技术题 + 行为题混合。
 4. 从热身到深入逐步加难。
-5. 尽量用开放式提问，引导给出具体案例。`,
+5. 尽量用开放式提问，引导给出具体案例。
+6. 至少 60% 的问题需要明确点名简历里出现过的细节（项目/公司/岗位/技术关键词），并围绕它追问验证深度。
+7. 每个问题尽量口语化且可直接问出口（1-2 句），避免“出题/考试”风格。`,
     questionGuidelinesWithoutResume: `准则：
 1. 覆盖核心技能、问题解决、协作与责任心。
 2. 技术题 + 行为题混合。
 3. 从热身到深入逐步加难。
-4. 尽量用开放式提问，引导给出具体案例。`,
+4. 尽量用开放式提问，引导给出具体案例。
+5. 每个问题尽量口语化且可直接问出口（1-2 句），避免“出题/考试”风格。`,
     jsonInstruction: '只返回 JSON 对象，key 为 "questions"，值为字符串数组。',
   },
   es: {
@@ -196,4 +204,3 @@ Règles :
     jsonInstruction: 'Retournez uniquement un objet JSON avec la clé "questions" contenant un tableau de chaînes.',
   },
 }
-
