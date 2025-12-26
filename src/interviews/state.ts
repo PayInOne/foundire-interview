@@ -43,6 +43,10 @@ export type UpdateStateResponse =
   | { status: 200; body: { success: true } }
   | { status: 400 | 404 | 500; body: { error: string } }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 export async function handleUpdateConversationState(
   interviewId: string,
   conversationState: unknown
@@ -55,19 +59,12 @@ export async function handleUpdateConversationState(
     return { status: 400, body: { error: 'Missing conversation_state' } }
   }
 
-  let conversationStateJson: Json
-  try {
-    conversationStateJson = toJson(conversationState)
-  } catch {
-    return { status: 400, body: { error: 'conversation_state must be JSON-serializable' } }
-  }
-
   try {
     const supabase = createAdminClient()
 
     const { data: interview, error: fetchError } = await supabase
       .from('interviews')
-      .select('id, status, interview_mode')
+      .select('id, status, interview_mode, conversation_state')
       .eq('id', interviewId)
       .single()
 
@@ -80,9 +77,23 @@ export async function handleUpdateConversationState(
       return { status: 400, body: { error: 'State updates are only supported for conversational interviews' } }
     }
 
+    // 避免客户端/服务端互相覆盖：对 object 形态做浅层 merge（incoming 覆盖 existing）
+    const existingState = (interview as { conversation_state?: unknown }).conversation_state
+    const mergedState =
+      isPlainRecord(existingState) && isPlainRecord(conversationState)
+        ? { ...existingState, ...conversationState }
+        : conversationState
+
+    let mergedStateJson: Json
+    try {
+      mergedStateJson = toJson(mergedState)
+    } catch {
+      return { status: 400, body: { error: 'conversation_state must be JSON-serializable' } }
+    }
+
     const { error: updateError } = await supabase
       .from('interviews')
-      .update({ conversation_state: conversationStateJson })
+      .update({ conversation_state: mergedStateJson })
       .eq('id', interviewId)
 
     if (updateError) {
@@ -97,4 +108,3 @@ export async function handleUpdateConversationState(
     return { status: 500, body: { error: message } }
   }
 }
-

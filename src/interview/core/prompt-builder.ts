@@ -1,4 +1,4 @@
-import type { InterviewContext, AnalysisResult } from './types'
+import type { InterviewContext, AnalysisResult, DigitalHumanOutput } from './types'
 
 function isInterviewerSpeaker(speaker: string): boolean {
   return speaker === 'ai' || speaker === 'interviewer' || speaker.startsWith('interviewer_')
@@ -64,13 +64,46 @@ ${historyText}
 Return JSON: assess answer quality, skills coverage, deep follow-up questions (prefer resume/details verification), and whether to switch topics.`
 }
 
-export function buildConversationPrompt(context: InterviewContext, analysisResult: AnalysisResult): string {
+export function buildConversationPrompt(
+  context: InterviewContext,
+  analysisResult: AnalysisResult,
+  action: DigitalHumanOutput['action']
+): string {
   const { job, conversation, timing } = context
   const { language } = conversation
 
   const difficultyHint = analysisResult.quality.shouldIncreaseDifficulty
     ? 'Increase difficulty slightly.'
     : 'Keep questions approachable and guide the candidate.'
+
+  const followUps = analysisResult.suggestedActions.followUpQuestions.slice(0, 3)
+  const followUpBlock =
+    followUps.length > 0
+      ? language === 'zh'
+        ? `\n【建议追问】（优先从中选 1 个最合适的直接提问）\n- ${followUps.join('\n- ')}\n`
+        : `\nSuggested follow-ups (pick 1 that fits best and ask it verbatim):\n- ${followUps.join('\n- ')}\n`
+      : ''
+
+  const actionBlock = (() => {
+    if (action.type === 'switch_topic' && action.nextTopic) {
+      if (language === 'zh') {
+        return `\n下一步动作：切换到新话题「${action.nextTopic}」。\n要求：先用一句自然的过渡语，然后立刻问一个关于「${action.nextTopic}」的开放式问题开始新话题。`
+      }
+      return `\nNext action: switch to the new topic "${action.nextTopic}".\nRequirement: say a natural transition sentence, then ask an open-ended question about "${action.nextTopic}" to start the new topic.`
+    }
+
+    if (action.type === 'end') {
+      if (language === 'zh') {
+        return `\n下一步动作：结束面试。\n要求：用 2-3 句总结候选人的表现与亮点（基于对话），感谢对方，并询问是否有最后一个问题。`
+      }
+      return `\nNext action: end the interview.\nRequirement: give a 2-3 sentence summary of the candidate's performance (based on the conversation), thank them, and ask if they have one final question.`
+    }
+
+    if (language === 'zh') {
+      return '\n下一步动作：继续当前话题。'
+    }
+    return '\nNext action: continue the current topic.'
+  })()
 
   if (language === 'zh') {
     return `你是一位专业、友好的 AI 面试官，正在为“${job.title}”岗位进行对话式面试。
@@ -84,6 +117,7 @@ export function buildConversationPrompt(context: InterviewContext, analysisResul
 剩余时间：${timing.remainingMinutes} 分钟
 表现：${analysisResult.quality.score}/10
 建议：${analysisResult.quality.shouldIncreaseDifficulty ? '适度提高难度' : '保持友好引导'}
+${followUpBlock}${actionBlock}
 
 只输出你要说的话，不要加任何标记。`
   }
@@ -99,7 +133,7 @@ Current topic: ${conversation.currentTopic}
 Time remaining: ${timing.remainingMinutes} minutes
 Performance: ${analysisResult.quality.score}/10
 Hint: ${difficultyHint}
+${followUpBlock}${actionBlock}
 
 Output only what you will say. No markup.`
 }
-

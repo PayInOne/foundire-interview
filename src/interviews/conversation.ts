@@ -16,6 +16,10 @@ type InterviewWithJob = {
     requirements: string | null
     questions: unknown
   } | null
+  candidates: {
+    name: string | null
+    resume_text: string | null
+  } | null
 }
 
 export interface ConversationRequest {
@@ -33,6 +37,11 @@ export interface ConversationRequest {
 export type ConversationResponse =
   | { status: 200; body: { success: true; aiResponse: string; action: unknown; assessment: unknown } }
   | { status: number; body: { error: string; details?: unknown } }
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
 
 function normalizeHistory(history: unknown): ConversationMessage[] {
   if (!Array.isArray(history)) return []
@@ -60,6 +69,32 @@ function normalizeStringArray(value: unknown): string[] {
     .filter(Boolean)
 }
 
+function extractTopicList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  const topics: string[] = []
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      const trimmed = entry.trim()
+      if (trimmed) topics.push(trimmed)
+      continue
+    }
+
+    const record = asRecord(entry)
+    if (!record) continue
+
+    const topic = typeof record.topic === 'string' ? record.topic : null
+    const skill = typeof record.skill === 'string' ? record.skill : null
+    const question = typeof record.question === 'string' ? record.question : null
+    const title = typeof record.title === 'string' ? record.title : null
+
+    const candidate = (topic || skill || question || title || '').trim()
+    if (candidate) topics.push(candidate)
+  }
+
+  return Array.from(new Set(topics)).slice(0, 30)
+}
+
 export async function handleConversation(request: ConversationRequest): Promise<ConversationResponse> {
   const supabase = createAdminClient()
 
@@ -78,6 +113,10 @@ export async function handleConversation(request: ConversationRequest): Promise<
           description,
           requirements,
           questions
+        ),
+        candidates!candidate_id (
+          name,
+          resume_text
         )
       `
     )
@@ -108,16 +147,14 @@ export async function handleConversation(request: ConversationRequest): Promise<
   }
 
   const job = interviewData.jobs
-  const jobQuestions = Array.isArray(job.questions)
-    ? job.questions.filter((q): q is string => typeof q === 'string').map((q) => q.trim()).filter(Boolean)
-    : []
+  const jobTopics = extractTopicList(job.questions)
 
   const conversationHistory = normalizeHistory(request.conversationHistory)
   const topicsCovered = normalizeStringArray(request.topicsCovered)
 
   const allTopics = Array.isArray(request.allTopics) && request.allTopics.length > 0
     ? normalizeStringArray(request.allTopics)
-    : jobQuestions
+    : jobTopics
 
   const requestedLanguage = typeof request.language === 'string' ? request.language : undefined
   const language = requestedLanguage || (conversationHistory.length > 0 && /[\u4e00-\u9fa5]/.test(conversationHistory[0].text) ? 'zh' : 'en')
@@ -125,6 +162,8 @@ export async function handleConversation(request: ConversationRequest): Promise<
   const requiredSkills = allTopics.length > 0 ? allTopics : ['General Technical Skills']
 
   const adapter = new DigitalHumanConversationAdapter()
+  const candidateName = interviewData.candidates?.name ?? undefined
+  const candidateResumeText = interviewData.candidates?.resume_text ?? undefined
 
   const result = await adapter.handleUserMessage({
     interviewId: request.interviewId,
@@ -139,7 +178,27 @@ export async function handleConversation(request: ConversationRequest): Promise<
     jobDescription: job.description,
     requirements: job.requirements ?? undefined,
     requiredSkills,
+    candidateName,
+    candidateResumeText,
+    conversationState: interviewData.conversation_state,
   })
+
+  // 持久化技能覆盖状态（skillsState）到 conversation_state，避免每次请求都从零开始
+  try {
+    const existingState = asRecord(interviewData.conversation_state) ?? {}
+    const mergedState = {
+      ...existingState,
+      ...adapter.exportState(),
+      lastUpdated: new Date().toISOString(),
+    }
+
+    await supabase
+      .from('interviews')
+      .update({ conversation_state: mergedState })
+      .eq('id', request.interviewId)
+  } catch (error) {
+    console.error('Failed to persist conversation_state skillsState:', error)
+  }
 
   return {
     status: 200,
