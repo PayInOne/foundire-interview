@@ -10,6 +10,7 @@ interface AISuggestion {
   content: string
   priority: string
   suggestedQuestions?: string[]
+  suggestedQuestionMeta?: unknown[]
   relatedSkills?: string[]
   created_at: string
   is_read: boolean
@@ -129,6 +130,9 @@ export async function handleGetCoseatSuggestions(coseatInterviewId: string): Pro
       const suggestedQuestions = Array.isArray(content.suggestedQuestions)
         ? content.suggestedQuestions.map((value) => String(value))
         : []
+      const suggestedQuestionMeta = Array.isArray(content.suggestedQuestionMeta)
+        ? content.suggestedQuestionMeta
+        : []
       const relatedSkills = Array.isArray(content.relatedSkills) ? content.relatedSkills.map((value) => String(value)) : []
 
       const createdAt = (suggestion as { created_at?: string | null }).created_at ?? new Date().toISOString()
@@ -144,6 +148,7 @@ export async function handleGetCoseatSuggestions(coseatInterviewId: string): Pro
         title,
         content: text,
         suggestedQuestions,
+        suggestedQuestionMeta,
         relatedSkills,
         is_read: Boolean(acknowledgedAt),
       }
@@ -252,6 +257,7 @@ export async function handleGenerateCoseatSuggestions(
         title: s.title,
         content: s.content,
         suggestedQuestions: s.suggestedQuestions || [],
+        suggestedQuestionMeta: s.suggestedQuestionMeta || [],
         relatedSkills: s.relatedSkills || [],
       },
     }))
@@ -276,6 +282,7 @@ export async function handleGenerateCoseatSuggestions(
       content: s.content,
       priority: s.priority,
       suggestedQuestions: s.suggestedQuestions,
+      suggestedQuestionMeta: s.suggestedQuestionMeta,
       relatedSkills: s.relatedSkills,
       created_at: now,
       is_read: false,

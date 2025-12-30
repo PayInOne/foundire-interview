@@ -3,6 +3,12 @@ import { conversationAnalyzer } from '../core/shared-analyzer'
 import { SkillTracker, type SkillEvaluation } from '../core/skill-tracker'
 import type { InterviewContext, AnalysisResult, ConversationMessage } from '../core/types'
 import { formatMessage, getAiSuggestionMessages, type SupportedLocale } from './messages'
+import {
+  normalizeFollowUpQuestions,
+  selectTopQuestions,
+  buildSkillGapQuestions,
+  type SuggestedQuestionMeta,
+} from './question-selection'
 
 export interface AISuggestion {
   type: 'follow_up' | 'skill_probe' | 'topic_switch' | 'warning' | 'summary'
@@ -10,6 +16,7 @@ export interface AISuggestion {
   title: string
   content: string
   suggestedQuestions?: string[]
+  suggestedQuestionMeta?: SuggestedQuestionMeta[]
   relatedSkills?: string[]
 }
 
@@ -152,29 +159,48 @@ export class AISuggestionAdapter {
     const suggestions: AISuggestion[] = []
     const l = getAiSuggestionMessages(language)
 
-    if (analysis.suggestedActions.followUpQuestions.length > 0) {
-      const limitedFollowUps = analysis.suggestedActions.followUpQuestions.slice(0, 5)
+    const followUpMeta = selectTopQuestions(
+      normalizeFollowUpQuestions(
+        analysis.suggestedActions.followUpQuestionsDetailed,
+        analysis.suggestedActions.followUpQuestions
+      ),
+      2
+    )
+
+    if (followUpMeta.length > 0) {
       suggestions.push({
         type: 'follow_up',
         priority: 'high',
         title: l.followUp,
         content: l.followUpContent,
-        suggestedQuestions: limitedFollowUps,
+        suggestedQuestions: followUpMeta.map((q) => q.text),
+        suggestedQuestionMeta: followUpMeta,
         relatedSkills: analysis.skillsCoverage.discussedSkills,
       })
+      return suggestions
     }
 
     if (analysis.skillsCoverage.missingSkills.length > 0) {
       const skillsSeparator = language === 'zh' ? '、' : ', '
-      const limitedMissingSkills = analysis.skillsCoverage.missingSkills.slice(0, 5)
-      suggestions.push({
-        type: 'skill_probe',
-        priority: 'medium',
-        title: l.skillsAlert,
-        content: formatMessage(l.skillsNotEvaluated, { skills: limitedMissingSkills.join(skillsSeparator) }),
-        suggestedQuestions: limitedMissingSkills.map((skill) => formatMessage(l.tellAboutSkill, { skill })),
-        relatedSkills: limitedMissingSkills,
-      })
+      const limitedMissingSkills = analysis.skillsCoverage.missingSkills.slice(0, 2)
+      const skillMeta = buildSkillGapQuestions(
+        limitedMissingSkills,
+        1,
+        (skill) => formatMessage(l.tellAboutSkill, { skill })
+      )
+
+      if (skillMeta.length > 0) {
+        suggestions.push({
+          type: 'skill_probe',
+          priority: 'medium',
+          title: l.skillsAlert,
+          content: formatMessage(l.skillsNotEvaluated, { skills: limitedMissingSkills.join(skillsSeparator) }),
+          suggestedQuestions: skillMeta.map((q) => q.text),
+          suggestedQuestionMeta: skillMeta,
+          relatedSkills: limitedMissingSkills,
+        })
+        return suggestions
+      }
     }
 
     if (analysis.suggestedActions.nextTopic) {
@@ -183,12 +209,12 @@ export class AISuggestionAdapter {
         priority: 'medium',
         title: l.topicSwitch,
         content: formatMessage(l.letsTalkAbout, { topic: analysis.suggestedActions.nextTopic }),
-        suggestedQuestions: [formatMessage(l.letsTalkAbout, { topic: analysis.suggestedActions.nextTopic })],
         relatedSkills: [],
       })
+      return suggestions
     }
 
-    if (analysis.quality.score <= 4) {
+    if (analysis.quality.score <= 3) {
       // 避免 ASR 碎片/信息不足导致的“低质量”刷屏：候选人内容太少时不给 warning
       const candidateChars = signals?.recentCandidateChars ?? 0
       if (candidateChars < 30) return suggestions

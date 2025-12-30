@@ -160,7 +160,11 @@ function extractRequiredSkills(questionsRaw: unknown): string[] {
   for (const q of questionsRaw) {
     if (typeof q === 'string') {
       const trimmed = q.trim()
-      if (trimmed) skills.push(trimmed)
+      if (!trimmed) continue
+      const looksLikeQuestion = trimmed.endsWith('?') || trimmed.endsWith('？')
+      if (!looksLikeQuestion && trimmed.length <= 32) {
+        skills.push(trimmed)
+      }
       continue
     }
 
@@ -306,6 +310,7 @@ export async function handleGenerateCopilotSuggestions(
           title: s.title,
           content: s.content,
           suggestedQuestions: s.suggestedQuestions || [],
+          suggestedQuestionMeta: s.suggestedQuestionMeta || [],
           relatedSkills: s.relatedSkills || [],
         },
       })
@@ -378,6 +383,9 @@ export async function handleGetCopilotSuggestions(copilotInterviewId: string): P
       const suggestedQuestions = Array.isArray(content.suggestedQuestions)
         ? content.suggestedQuestions.map((value) => String(value))
         : []
+      const suggestedQuestionMeta = Array.isArray(content.suggestedQuestionMeta)
+        ? content.suggestedQuestionMeta
+        : []
       const relatedSkills = Array.isArray(content.relatedSkills) ? content.relatedSkills.map((value) => String(value)) : []
 
       return {
@@ -388,6 +396,7 @@ export async function handleGetCopilotSuggestions(copilotInterviewId: string): P
         title,
         content: text,
         suggestedQuestions,
+        suggestedQuestionMeta,
         relatedSkills,
         is_read: Boolean((suggestion as { acknowledged_at?: string | null }).acknowledged_at),
       }

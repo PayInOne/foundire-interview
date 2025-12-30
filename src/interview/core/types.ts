@@ -57,8 +57,17 @@ export interface AnalysisResult {
 
   suggestedActions: {
     followUpQuestions: string[]
+    followUpQuestionsDetailed?: FollowUpQuestion[]
     nextTopic?: string
   }
+}
+
+export interface FollowUpQuestion {
+  text: string
+  source: 'transcript' | 'resume' | 'job' | 'skills' | 'unknown'
+  evidence?: string
+  confidence?: number
+  intent?: 'follow_up' | 'resume_probe' | 'job_requirement' | 'skill_gap' | 'topic_switch'
 }
 
 export interface DigitalHumanOutput {
@@ -72,4 +81,3 @@ export interface DigitalHumanOutput {
     shouldIncreaseDifficulty: boolean
   }
 }
-

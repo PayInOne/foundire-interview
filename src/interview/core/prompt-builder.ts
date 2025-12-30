@@ -54,14 +54,14 @@ ${candidate?.name ? `【候选人】\n姓名：${candidate.name}\n` : ''}${resum
 【最近对话】
 ${historyText}
 
-请输出 JSON：评估回答质量、技能覆盖、建议追问（尽量结合简历/细节验证），以及是否建议切换话题。`
+请输出 JSON：评估回答质量、技能覆盖、建议追问（尽量结合简历/细节验证），以及是否建议切换话题。追问需要标注来源并给出对应证据片段（引用上面原文）。`
   }
 
   return `${common}
 ${candidate?.name ? `Candidate: ${candidate.name}\n` : ''}${resume ? `Resume summary:\n${resume}\n\n` : ''}Recent conversation:
 ${historyText}
 
-Return JSON: assess answer quality, skills coverage, deep follow-up questions (prefer resume/details verification), and whether to switch topics.`
+Return JSON: assess answer quality, skills coverage, deep follow-up questions (prefer resume/details verification), and whether to switch topics. Include source + evidence quotes from the materials above.`
 }
 
 export function buildConversationPrompt(
