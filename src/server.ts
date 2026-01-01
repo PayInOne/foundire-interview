@@ -8,7 +8,7 @@ import { evaluateTopicPerformance } from './openai/topic-evaluation'
 import { handleInterviewHeartbeat } from './interviews/heartbeat'
 import { handleSaveTranscript } from './interviews/transcript'
 import { handleInterviewConsent } from './interviews/consent'
-import { handleLiveKitStart, handleLiveKitStop } from './interviews/livekit-recording'
+import { handleGetLiveKitRecordingStatus, handleLiveKitStart, handleLiveKitStop } from './interviews/livekit-recording'
 import { handleCreateInterview } from './interviews/create'
 import { handleGetInterview } from './interviews/get'
 import { handleGetConversationState, handleUpdateConversationState } from './interviews/state'
@@ -442,6 +442,20 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
       if (method === 'POST' && pathname === '/internal/interviews/livekit/stop') {
         const body = await readJsonBody(req)
         const response = await handleLiveKitStop(body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (
+        segments.length === 5 &&
+        segments[0] === 'internal' &&
+        segments[1] === 'interviews' &&
+        segments[3] === 'recording' &&
+        segments[4] === 'status' &&
+        method === 'GET'
+      ) {
+        const interviewId = segments[2]
+        const response = await handleGetLiveKitRecordingStatus(interviewId)
         sendJson(res, response.status, response.body)
         return
       }

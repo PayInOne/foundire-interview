@@ -241,3 +241,93 @@ export async function handleLiveKitStop(body: unknown): Promise<LiveKitStopRespo
 
   return { status: 200, body: { success: true, stopped: true } }
 }
+
+export type LiveKitStatusResponse =
+  | { status: 200; body: Record<string, unknown> }
+  | { status: 400 | 404 | 500; body: { error: string; message?: string } }
+
+export async function handleGetLiveKitRecordingStatus(interviewId: string): Promise<LiveKitStatusResponse> {
+  if (!interviewId) {
+    return { status: 400, body: { error: 'Missing interviewId' } }
+  }
+
+  try {
+    const admin = createAdminClient()
+
+    let interview: unknown = null
+    let error: { code?: string } | null = null
+
+    ;({ data: interview, error } = await admin
+      .from('interviews')
+      .select('id, livekit_egress_id, livekit_region')
+      .eq('id', interviewId)
+      .single())
+
+    if (error?.code === '42703') {
+      ;({ data: interview, error } = await admin
+        .from('interviews')
+        .select('id, livekit_egress_id')
+        .eq('id', interviewId)
+        .single())
+    }
+
+    if (error || !interview) {
+      return { status: 404, body: { error: 'Interview not found' } }
+    }
+
+    const existing = interview as unknown as { livekit_egress_id: string | null; livekit_region?: unknown }
+
+    if (!existing.livekit_egress_id) {
+      return {
+        status: 200,
+        body: { success: true, status: 'no_recording', message: 'No recording was started for this interview' },
+      }
+    }
+
+    const livekitRegion = parseRegion(existing.livekit_region)
+    const egressClient = getEgressClientForRegion(livekitRegion)
+    const egressList = await egressClient.listEgress({ egressId: existing.livekit_egress_id })
+
+    if (!egressList || egressList.length === 0) {
+      return { status: 200, body: { success: true, status: 'not_found', message: 'Recording not found' } }
+    }
+
+    const egress = egressList[0]
+    const statusMap: Record<number, string> = {
+      0: 'starting',
+      1: 'active',
+      2: 'ending',
+      3: 'complete',
+      4: 'failed',
+      5: 'aborted',
+      6: 'limit_reached',
+    }
+
+    const status = statusMap[egress.status] || 'unknown'
+    const isComplete = egress.status === 3
+    const hasFailed = egress.status === 4 || egress.status === 5
+
+    return {
+      status: 200,
+      body: {
+        success: true,
+        status,
+        egressId: existing.livekit_egress_id,
+        isComplete,
+        hasFailed,
+        error: egress.error || null,
+        startedAt: egress.startedAt ? new Date(Number(egress.startedAt) / 1000000).toISOString() : null,
+        endedAt: egress.endedAt ? new Date(Number(egress.endedAt) / 1000000).toISOString() : null,
+      },
+    }
+  } catch (error) {
+    console.error('Error checking LiveKit recording status:', error)
+    return {
+      status: 500,
+      body: {
+        error: 'Failed to check recording status',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+    }
+  }
+}
