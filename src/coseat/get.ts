@@ -29,7 +29,8 @@ export async function handleGetCoseatInterview(coseatInterviewId: string, userId
         ai_enabled,
         transcript_count,
         interview:interviews(
-          interview_duration
+          interview_duration,
+          recording_enabled
         ),
         candidate:candidates(
           id,
@@ -60,7 +61,10 @@ export async function handleGetCoseatInterview(coseatInterviewId: string, userId
       started_at: string | null
       ai_enabled: boolean | null
       transcript_count: number | null
-      interview: { interview_duration: number } | { interview_duration: number }[] | null
+      interview:
+        | { interview_duration: number; recording_enabled?: boolean | null }
+        | { interview_duration: number; recording_enabled?: boolean | null }[]
+        | null
       candidate:
         | { id: string; name: string; email: string; phone: string | null }
         | { id: string; name: string; email: string; phone: string | null }[]
@@ -95,6 +99,7 @@ export async function handleGetCoseatInterview(coseatInterviewId: string, userId
           aiEnabled: record.ai_enabled ?? true,
           transcriptCount: record.transcript_count ?? 0,
           interviewDuration: normalizeInterviewDurationMinutes(interview?.interview_duration),
+          recordingEnabled: interview?.recording_enabled ?? true,
           candidate: {
             id: candidate.id,
             name: candidate.name,

@@ -74,15 +74,18 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
 
     const { data: interviewCode } = await supabase
       .from('interview_codes')
-      .select('interview_duration')
+      .select('interview_duration, recording_enabled')
       .eq('job_id', jobId)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
 
-    const interviewDurationFromCode = (interviewCode as unknown as { interview_duration?: number | null } | null)
-      ?.interview_duration
+    const interviewCodeData = interviewCode as unknown as {
+      interview_duration?: number | null
+      recording_enabled?: boolean | null
+    } | null
+    const interviewDurationFromCode = interviewCodeData?.interview_duration
     const interviewDuration = interviewDurationFromCode ?? DEFAULT_INTERVIEW_DURATION_MINUTES
 
     if (interviewDurationFromCode !== null && interviewDurationFromCode !== undefined) {
@@ -108,7 +111,7 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
         },
       }
     }
-    const recordingEnabled = true
+    const recordingEnabled = interviewCodeData?.recording_enabled ?? true
 
     const { data: existingInterview } = await supabase
       .from('interviews')

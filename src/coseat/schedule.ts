@@ -5,7 +5,7 @@ import {
   isAllowedInterviewDurationMinutes,
   normalizeInterviewDurationMinutes,
 } from '../interviews/constants'
-import { asRecord, getString } from '../utils/parse'
+import { asRecord, getBoolean, getString } from '../utils/parse'
 
 export type CoseatSchedulePostResponse =
   | { status: 200; body: Record<string, unknown> }
@@ -19,6 +19,7 @@ export async function handleScheduleCoseatInterview(body: unknown): Promise<Cose
     const jobId = getString(record, 'jobId')
     const userId = getString(record, 'userId')
     const interviewDuration = record.interviewDuration
+    const recordingEnabled = getBoolean(record, 'recordingEnabled') ?? true
 
     if (!candidateId || !jobId) {
       return { status: 400, body: { success: false, error: 'Missing required fields' } }
@@ -113,6 +114,7 @@ export async function handleScheduleCoseatInterview(body: unknown): Promise<Cose
         status: 'pending',
         interview_mode: INTERVIEW_MODES.ASSISTED_VOICE,
         interview_duration: finalInterviewDuration,
+        recording_enabled: recordingEnabled,
       })
       .select()
       .single()
@@ -208,7 +210,7 @@ export async function handleGetActiveCoseatInterview(
 
     let query = adminSupabase
       .from('coseat_interviews')
-      .select('id, interview_id, interviewer_id, session_status, created_at, started_at, ended_at')
+      .select('id, interview_id, interviewer_id, session_status, created_at, started_at, ended_at, interview:interviews(recording_enabled)')
       .eq('candidate_id', candidateId)
 
     // 如果不包含所有状态，过滤掉 cancelled（但保留 completed 以显示完成状态）
@@ -225,11 +227,32 @@ export async function handleGetActiveCoseatInterview(
       return { status: 500, body: { success: false, error: error.message } }
     }
 
+    const activeInterview = data && data.length > 0 ? data[0] : null
+    if (!activeInterview) {
+      return {
+        status: 200,
+        body: {
+          success: true,
+          data: null,
+        },
+      }
+    }
+
+    const interviewJoin = (activeInterview as { interview?: { recording_enabled: boolean | null } | { recording_enabled: boolean | null }[] | null }).interview
+    const recordingEnabled = Array.isArray(interviewJoin)
+      ? interviewJoin[0]?.recording_enabled
+      : interviewJoin?.recording_enabled
+
+    const { interview, ...rest } = activeInterview as { interview?: unknown } & Record<string, unknown>
+
     return {
       status: 200,
       body: {
         success: true,
-        data: data && data.length > 0 ? data[0] : null,
+        data: {
+          ...rest,
+          recording_enabled: recordingEnabled ?? true,
+        },
       },
     }
   } catch (error) {
@@ -237,4 +260,3 @@ export async function handleGetActiveCoseatInterview(
     return { status: 500, body: { success: false, error: 'Internal server error' } }
   }
 }
-

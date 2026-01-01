@@ -70,6 +70,7 @@ type CopilotInterviewBase = {
   available_slots: TimeSlot[] | null
   interviewer_timezone: string | null
   candidate_timezone: string | null
+  recording_enabled?: boolean | null
 }
 
 type CopilotInterviewParticipantRow = {
@@ -494,7 +495,7 @@ export async function handleGetCopilotSchedule(
     let query = adminSupabase
       .from('copilot_interviews')
       .select(
-        'id, interview_id, interviewer_id, room_status, scheduled_at, candidate_confirmed, invitation_expires_at, livekit_room_name, created_at, confirmation_token, scheduling_mode, available_slots, interviewer_timezone, candidate_timezone'
+        'id, interview_id, interviewer_id, room_status, scheduled_at, candidate_confirmed, invitation_expires_at, livekit_room_name, created_at, confirmation_token, scheduling_mode, available_slots, interviewer_timezone, candidate_timezone, recording_enabled'
       )
       .eq('candidate_id', candidateId)
 
