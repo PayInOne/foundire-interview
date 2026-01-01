@@ -49,11 +49,21 @@ export async function handleAzureTts(body: unknown): Promise<AzureTtsResponse> {
     }
     const pitchValue = pitchMap[pitch] || '0%'
 
+    const escapeSsml = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+
+    const ssmlText = escapeSsml(text)
+
     const ssml = `
       <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${language}">
         <voice name="${voiceName}">
           <prosody rate="${rateValue}" pitch="${pitchValue}">
-            ${text}
+            ${ssmlText}
           </prosody>
         </voice>
       </speak>
@@ -103,4 +113,3 @@ export async function handleAzureTts(body: unknown): Promise<AzureTtsResponse> {
     return { status: 500, body: { error: message } }
   }
 }
-
