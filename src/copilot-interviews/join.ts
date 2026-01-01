@@ -62,6 +62,8 @@ export async function handleJoinCopilotInterview(
       scheduling_mode: string | null
       scheduled_at: string | null
       candidate_confirmed: boolean | null
+      recording_enabled?: boolean | null
+      candidate_recording_consent?: boolean | null
     }
 
     const isScheduledMode =
@@ -120,6 +122,11 @@ export async function handleJoinCopilotInterview(
           },
         }
       }
+    }
+
+    const recordingEnabled = copilotInterview.recording_enabled ?? true
+    if (role === 'candidate' && recordingEnabled && !copilotInterview.candidate_recording_consent) {
+      return { status: 403, body: { error: 'candidate_consent_required' } }
     }
 
     let participantIndex = 0
@@ -286,6 +293,7 @@ export async function handleJoinCopilotInterview(
           interviewDuration: normalizeInterviewDurationMinutes((interviewRecord as { interview_duration?: unknown } | null)?.interview_duration),
           livekitRegion: livekitConfig.region,
           usedFallback,
+          recordingEnabled: copilotInterview.recording_enabled ?? true,
         },
       },
     }

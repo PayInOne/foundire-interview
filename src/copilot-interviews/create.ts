@@ -10,10 +10,10 @@ async function checkCredits(
   supabase: ReturnType<typeof createAdminClient>,
   companyId: string,
   requiredCredits: number
-): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string }> {
+): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string; recordingEnabled: boolean }> {
   const { data: company, error } = await supabase
     .from('companies')
-    .select('credits_remaining')
+    .select('credits_remaining, recording_enabled')
     .eq('id', companyId)
     .single()
 
@@ -23,10 +23,12 @@ async function checkCredits(
       remaining: 0,
       required: requiredCredits,
       message: 'Company not found or error fetching credits',
+      recordingEnabled: true,
     }
   }
 
   const remaining = (company as { credits_remaining: number | null }).credits_remaining ?? 0
+  const recordingEnabled = (company as { recording_enabled?: boolean | null }).recording_enabled ?? true
   return {
     hasCredits: remaining >= requiredCredits,
     remaining,
@@ -35,6 +37,7 @@ async function checkCredits(
       remaining < requiredCredits
         ? `Insufficient credits. Required: ${requiredCredits}, Available: ${remaining}`
         : undefined,
+    recordingEnabled,
   }
 }
 
@@ -99,6 +102,7 @@ export async function handleCreateCopilotInterview(body: unknown): Promise<Copil
         },
       }
     }
+    const recordingEnabled = creditCheck.recordingEnabled
 
     const { data: existing } = await supabase
       .from('copilot_interviews')
@@ -124,6 +128,7 @@ export async function handleCreateCopilotInterview(body: unknown): Promise<Copil
         candidateId,
         jobId,
         companyId,
+        recordingEnabled,
       },
       supabase
     )

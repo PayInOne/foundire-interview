@@ -27,6 +27,7 @@ export interface CopilotInterviewState {
   ai_enabled: boolean
   interviewer_joined_at: string | null
   candidate_joined_at: string | null
+  candidate_recording_consent?: boolean | null
   livekit_room_name: string | null
   livekit_region: LiveKitRegion | null
   livekit_egress_id: string | null
@@ -45,6 +46,8 @@ export interface CopilotInterviewState {
   schedule_confirmed_at: string | null
   reminder_sent_24h: boolean
   reminder_sent_1h: boolean
+  consent_timestamp?: string | null
+  recording_enabled?: boolean | null
 }
 
 export interface CopilotInterviewParticipant {
@@ -63,6 +66,7 @@ export interface CreateCopilotInterviewParams {
   candidateId: string
   jobId: string
   companyId: string
+  recordingEnabled?: boolean
 }
 
 export async function createCopilotInterview(
@@ -85,6 +89,7 @@ export async function createCopilotInterview(
         livekit_room_name: roomName,
         room_status: 'waiting_both',
         ai_enabled: true,
+        recording_enabled: params.recordingEnabled ?? true,
       })
       .select()
       .single()

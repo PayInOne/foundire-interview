@@ -13,7 +13,7 @@ export async function handleGetInterview(interviewId: string): Promise<GetInterv
     const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('interviews')
-      .select('id, interview_mode, interview_duration, status, started_at')
+      .select('id, interview_mode, interview_duration, status, started_at, recording_enabled, candidate_recording_consent')
       .eq('id', interviewId)
       .single()
 
@@ -28,4 +28,3 @@ export async function handleGetInterview(interviewId: string): Promise<GetInterv
     return { status: 500, body: { error: message } }
   }
 }
-

@@ -216,6 +216,13 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     }
 
     const companyId = (job as { company_id: string }).company_id
+    const { data: companySettings } = await adminSupabase
+      .from('companies')
+      .select('recording_enabled')
+      .eq('id', companyId)
+      .single()
+    const recordingEnabled =
+      (companySettings as { recording_enabled?: boolean | null } | null)?.recording_enabled ?? true
 
     const { data: isMember } = await adminSupabase
       .from('company_members')
@@ -252,6 +259,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
         status: 'pending',
         interview_mode: INTERVIEW_MODES.ASSISTED_VIDEO,
         interview_duration: finalInterviewDuration,
+        recording_enabled: recordingEnabled,
       })
       .select()
       .single()
@@ -307,6 +315,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
           candidate_email: candidateEmail,
           livekit_room_name: roomName,
           ai_enabled: true,
+          recording_enabled: recordingEnabled,
           // New scheduling fields
           scheduling_mode: schedulingMode,
           available_slots: availableSlots,

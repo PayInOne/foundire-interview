@@ -7,6 +7,7 @@ import { analyzeCandidateMessage } from './openai/analyze-message'
 import { evaluateTopicPerformance } from './openai/topic-evaluation'
 import { handleInterviewHeartbeat } from './interviews/heartbeat'
 import { handleSaveTranscript } from './interviews/transcript'
+import { handleInterviewConsent } from './interviews/consent'
 import { handleLiveKitStart, handleLiveKitStop } from './interviews/livekit-recording'
 import { handleCreateInterview } from './interviews/create'
 import { handleGetInterview } from './interviews/get'
@@ -21,6 +22,7 @@ import { handleConfirmCopilotInterview, handleGetCopilotConfirmInfo } from './co
 import { handleDeclineCopilotInterview } from './copilot-interviews/decline'
 import { handleSendInterviewReminders, handleCheckMissedInterviews } from './copilot-interviews/reminders'
 import { handleJoinCopilotInterview } from './copilot-interviews/join'
+import { handleCopilotInterviewConsent } from './copilot-interviews/consent'
 import { handleGetCopilotInterviewStatus } from './copilot-interviews/status'
 import { handleCopilotInterviewHeartbeat } from './copilot-interviews/heartbeat'
 import { handleExtendCopilotInterview } from './copilot-interviews/extend'
@@ -684,6 +686,20 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
       if (
         segments.length === 4 &&
         segments[0] === 'internal' &&
+        segments[1] === 'interviews' &&
+        segments[3] === 'consent' &&
+        method === 'POST'
+      ) {
+        const interviewId = segments[2]
+        const body = await readJsonBody(req)
+        const response = await handleInterviewConsent(interviewId, body)
+        sendJson(res, response.status, response.body)
+        return
+      }
+
+      if (
+        segments.length === 4 &&
+        segments[0] === 'internal' &&
         segments[1] === 'copilot-interviews' &&
         segments[2] === 'confirm' &&
         method === 'GET'
@@ -735,6 +751,13 @@ export async function startHttpServer({ port }: { port: number }): Promise<void>
 
       if (segments.length >= 3 && segments[0] === 'internal' && segments[1] === 'copilot-interviews') {
         const copilotInterviewId = segments[2]
+
+        if (segments.length === 4 && segments[3] === 'consent' && method === 'POST') {
+          const body = await readJsonBody(req)
+          const response = await handleCopilotInterviewConsent(copilotInterviewId, body)
+          sendJson(res, response.status, response.body)
+          return
+        }
 
         if (segments.length === 4 && segments[3] === 'join' && method === 'POST') {
           const body = await readJsonBody(req)

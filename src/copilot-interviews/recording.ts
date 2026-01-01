@@ -10,7 +10,7 @@ import { completeCopilotInterview, getCopilotInterviewState } from './manager'
 
 export type CopilotRecordingStartResponse =
   | { status: 200; body: Record<string, unknown> }
-  | { status: 400 | 404 | 425 | 500; body: Record<string, unknown> }
+  | { status: 400 | 403 | 404 | 425 | 500; body: Record<string, unknown> }
 
 export async function handleStartCopilotRecording(copilotInterviewId: string): Promise<CopilotRecordingStartResponse> {
   try {
@@ -26,6 +26,20 @@ export async function handleStartCopilotRecording(copilotInterviewId: string): P
       livekit_egress_id: string | null
       livekit_room_name: string | null
       livekit_region: LiveKitRegion | null
+      recording_enabled?: boolean | null
+      candidate_recording_consent?: boolean | null
+    }
+
+    const recordingEnabled = copilotInterview.recording_enabled ?? true
+    if (!recordingEnabled) {
+      return {
+        status: 200,
+        body: { success: true, skipped: true, reason: 'recording_disabled' },
+      }
+    }
+
+    if (!copilotInterview.candidate_recording_consent) {
+      return { status: 403, body: { error: 'candidate_consent_required' } }
     }
 
     if (copilotInterview.livekit_egress_id) {
@@ -275,4 +289,3 @@ export async function handleGetCopilotRecordingStatus(copilotInterviewId: string
     return { status: 500, body: { success: false, error: 'Failed to check recording status', message: error instanceof Error ? error.message : 'Unknown error' } }
   }
 }
-

@@ -5,7 +5,8 @@ import { buildLiveKitS3Output, getLiveKitRecordingKey, getLiveKitRoomName } from
 
 export type LiveKitStartResponse =
   | { status: 200; body: { success: true; egressId: string; alreadyStarted?: boolean } }
-  | { status: 400 | 404 | 500; body: { error: string } }
+  | { status: 200; body: { success: true; skipped: true; reason: string } }
+  | { status: 400 | 403 | 404 | 500; body: { error: string } }
 
 function parseRegion(value: unknown): LiveKitRegion | null {
   return value === 'self-hosted' || value === 'cloud' ? value : null
@@ -34,7 +35,7 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
 
   ;({ data: interview, error } = await admin
     .from('interviews')
-    .select('id, livekit_room_name, livekit_egress_id, livekit_region')
+    .select('id, livekit_room_name, livekit_egress_id, livekit_region, recording_enabled, candidate_recording_consent')
     .eq('id', interviewId)
     .single())
 
@@ -42,7 +43,7 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
     supportsLivekitRegion = false
     ;({ data: interview, error } = await admin
       .from('interviews')
-      .select('id, livekit_room_name, livekit_egress_id')
+      .select('id, livekit_room_name, livekit_egress_id, recording_enabled, candidate_recording_consent')
       .eq('id', interviewId)
       .single())
   }
@@ -55,10 +56,21 @@ export async function handleLiveKitStart(body: unknown): Promise<LiveKitStartRes
     livekit_room_name: string | null
     livekit_egress_id: string | null
     livekit_region?: unknown
+    recording_enabled?: boolean | null
+    candidate_recording_consent?: boolean | null
   }
 
   if (existing.livekit_egress_id) {
     return { status: 200, body: { success: true, egressId: existing.livekit_egress_id, alreadyStarted: true } }
+  }
+
+  const recordingEnabled = existing.recording_enabled ?? true
+  if (!recordingEnabled) {
+    return { status: 200, body: { success: true, skipped: true, reason: 'recording_disabled' } }
+  }
+
+  if (!existing.candidate_recording_consent) {
+    return { status: 403, body: { error: 'candidate_consent_required' } }
   }
 
   const roomName = existing.livekit_room_name ?? getLiveKitRoomName(interviewId)
