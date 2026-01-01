@@ -17,10 +17,10 @@ async function checkCredits(
   supabase: ReturnType<typeof createAdminClient>,
   companyId: string,
   requiredCredits: number
-): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string; recordingEnabled: boolean }> {
+): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string }> {
   const { data: company, error } = await supabase
     .from('companies')
-    .select('credits_remaining, recording_enabled')
+    .select('credits_remaining')
     .eq('id', companyId)
     .single()
 
@@ -30,12 +30,10 @@ async function checkCredits(
       remaining: 0,
       required: requiredCredits,
       message: 'Company not found or error fetching credits',
-      recordingEnabled: true,
     }
   }
 
   const remaining = (company as { credits_remaining: number | null }).credits_remaining ?? 0
-  const recordingEnabled = (company as { recording_enabled?: boolean | null }).recording_enabled ?? true
   return {
     hasCredits: remaining >= requiredCredits,
     remaining,
@@ -44,7 +42,6 @@ async function checkCredits(
       remaining < requiredCredits
         ? `Insufficient credits. Required: ${requiredCredits}, Available: ${remaining}`
         : undefined,
-    recordingEnabled,
   }
 }
 
@@ -111,7 +108,7 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
         },
       }
     }
-    const recordingEnabled = creditCheck.recordingEnabled
+    const recordingEnabled = true
 
     const { data: existingInterview } = await supabase
       .from('interviews')

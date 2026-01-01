@@ -8,7 +8,7 @@ import {
   normalizeInterviewDurationMinutes,
 } from '../interviews/constants'
 import { createAdminClient } from '../supabase/admin'
-import { asRecord, getString } from '../utils/parse'
+import { asRecord, getBoolean, getString } from '../utils/parse'
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -111,6 +111,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     const maxDate = new Date(now.getTime() + MAX_SCHEDULING_DAYS * 24 * 60 * 60 * 1000)
     const parsedSlots = schedulingMode === 'candidate_choice' ? parseTimeSlots(availableSlotsRaw, now, maxDate) : null
     const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : null
+    const recordingEnabled = getBoolean(record, 'recordingEnabled') ?? true
 
     // Validate scheduling parameters
     if (schedulingMode === 'scheduled') {
@@ -216,13 +217,6 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     }
 
     const companyId = (job as { company_id: string }).company_id
-    const { data: companySettings } = await adminSupabase
-      .from('companies')
-      .select('recording_enabled')
-      .eq('id', companyId)
-      .single()
-    const recordingEnabled =
-      (companySettings as { recording_enabled?: boolean | null } | null)?.recording_enabled ?? true
 
     const { data: isMember } = await adminSupabase
       .from('company_members')

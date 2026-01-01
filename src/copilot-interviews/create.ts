@@ -1,6 +1,6 @@
 import { createAdminClient } from '../supabase/admin'
 import { createCopilotInterview } from './manager'
-import { asRecord, getString } from '../utils/parse'
+import { asRecord, getBoolean, getString } from '../utils/parse'
 
 export type CopilotCreateResponse =
   | { status: 200; body: Record<string, unknown> }
@@ -10,10 +10,10 @@ async function checkCredits(
   supabase: ReturnType<typeof createAdminClient>,
   companyId: string,
   requiredCredits: number
-): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string; recordingEnabled: boolean }> {
+): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string }> {
   const { data: company, error } = await supabase
     .from('companies')
-    .select('credits_remaining, recording_enabled')
+    .select('credits_remaining')
     .eq('id', companyId)
     .single()
 
@@ -23,12 +23,10 @@ async function checkCredits(
       remaining: 0,
       required: requiredCredits,
       message: 'Company not found or error fetching credits',
-      recordingEnabled: true,
     }
   }
 
   const remaining = (company as { credits_remaining: number | null }).credits_remaining ?? 0
-  const recordingEnabled = (company as { recording_enabled?: boolean | null }).recording_enabled ?? true
   return {
     hasCredits: remaining >= requiredCredits,
     remaining,
@@ -37,7 +35,6 @@ async function checkCredits(
       remaining < requiredCredits
         ? `Insufficient credits. Required: ${requiredCredits}, Available: ${remaining}`
         : undefined,
-    recordingEnabled,
   }
 }
 
@@ -102,7 +99,7 @@ export async function handleCreateCopilotInterview(body: unknown): Promise<Copil
         },
       }
     }
-    const recordingEnabled = creditCheck.recordingEnabled
+    const recordingEnabled = getBoolean(record, 'recordingEnabled') ?? true
 
     const { data: existing } = await supabase
       .from('copilot_interviews')
