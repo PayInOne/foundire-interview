@@ -85,6 +85,16 @@ export async function handleUseInterviewCode(body: unknown): Promise<UseIntervie
             .eq('id', codeId)
         }
       }
+
+      const { error: invitationError } = await supabase
+        .from('candidate_invitations')
+        .update({ code_used: true, code_used_at: new Date().toISOString() })
+        .eq('interview_code_id', codeId)
+        .eq('code_used', false)
+
+      if (invitationError) {
+        console.error('Error updating candidate invitation usage:', invitationError)
+      }
     }
 
     return { status: 200, body: { success: true } }
@@ -93,4 +103,3 @@ export async function handleUseInterviewCode(body: unknown): Promise<UseIntervie
     return { status: 500, body: { error: 'Internal server error' } }
   }
 }
-

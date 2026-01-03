@@ -65,11 +65,25 @@ export async function handleVerifyInterviewCode(body: unknown): Promise<VerifyIn
       return { status: 400, body: { error: 'Interview code has expired', valid: false } }
     }
 
+    if (interviewCode.used_count >= interviewCode.max_uses) {
+      return { status: 400, body: { error: 'Interview code has already been used', valid: false } }
+    }
+
+    const { data: invitation } = await supabase
+      .from('candidate_invitations')
+      .select('candidate_id')
+      .eq('interview_code_id', interviewCode.id)
+      .eq('code_used', false)
+      .order('invited_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
     return {
       status: 200,
       body: {
         valid: true,
         codeId: interviewCode.id,
+        candidateId: invitation?.candidate_id ?? null,
         remainingUses: interviewCode.max_uses - interviewCode.used_count,
         maxUses: interviewCode.max_uses,
         usedCount: interviewCode.used_count,
@@ -80,4 +94,3 @@ export async function handleVerifyInterviewCode(body: unknown): Promise<VerifyIn
     return { status: 500, body: { error: 'Internal server error', valid: false } }
   }
 }
-

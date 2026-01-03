@@ -7,42 +7,10 @@ import {
 
 export type CreateInterviewResponse =
   | { status: 200; body: Record<string, unknown> }
-  | { status: 400 | 402 | 404 | 500; body: { error: string; [key: string]: unknown } }
+  | { status: 400 | 404 | 500; body: { error: string; [key: string]: unknown } }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-async function checkCredits(
-  supabase: ReturnType<typeof createAdminClient>,
-  companyId: string,
-  requiredCredits: number
-): Promise<{ hasCredits: boolean; remaining: number; required: number; message?: string }> {
-  const { data: company, error } = await supabase
-    .from('companies')
-    .select('credits_remaining')
-    .eq('id', companyId)
-    .single()
-
-  if (error || !company) {
-    return {
-      hasCredits: false,
-      remaining: 0,
-      required: requiredCredits,
-      message: 'Company not found or error fetching credits',
-    }
-  }
-
-  const remaining = (company as { credits_remaining: number | null }).credits_remaining ?? 0
-  return {
-    hasCredits: remaining >= requiredCredits,
-    remaining,
-    required: requiredCredits,
-    message:
-      remaining < requiredCredits
-        ? `Insufficient credits. Required: ${requiredCredits}, Available: ${remaining}`
-        : undefined,
-  }
 }
 
 export async function handleCreateInterview(body: unknown): Promise<CreateInterviewResponse> {
@@ -50,6 +18,7 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
 
   const candidateId = typeof record?.candidateId === 'string' ? record.candidateId : ''
   const jobId = typeof record?.jobId === 'string' ? record.jobId : ''
+  const codeId = typeof record?.codeId === 'string' ? record.codeId : ''
   const interviewMode = typeof record?.interviewMode === 'string' ? record.interviewMode : undefined
 
   if (!candidateId || !jobId) {
@@ -72,19 +41,139 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
 
     const candidateData = candidate as unknown as { id: string; company_id: string; interview_mode?: string | null }
 
-    const { data: interviewCode } = await supabase
-      .from('interview_codes')
-      .select('interview_duration, recording_enabled')
+    const { data: latestInterview } = await supabase
+      .from('interviews')
+      .select('id, status, transcript, interview_mode, conversation_state')
+      .eq('candidate_id', candidateId)
       .eq('job_id', jobId)
-      .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
-    const interviewCodeData = interviewCode as unknown as {
+    const latestInterviewRecord = latestInterview as
+      | { id: string; status: string; transcript: unknown; interview_mode: string | null; conversation_state: unknown }
+      | null
+
+    if (latestInterviewRecord && ['in-progress', 'paused'].includes(latestInterviewRecord.status)) {
+      const transcript = Array.isArray(latestInterviewRecord.transcript) ? latestInterviewRecord.transcript : []
+      const normalizedMode = normalizeInterviewMode(latestInterviewRecord.interview_mode)
+
+      return {
+        status: 200,
+        body: {
+          interviewId: latestInterviewRecord.id,
+          existing: true,
+          interviewMode: normalizedMode,
+          answeredQuestions: transcript.length,
+          transcript,
+          conversationState: latestInterviewRecord.conversation_state || null,
+        },
+      }
+    }
+
+    const hasPriorInterview = Boolean(latestInterviewRecord)
+
+    type InterviewCodeData = {
+      id: string
+      job_id: string
       interview_duration?: number | null
       recording_enabled?: boolean | null
-    } | null
+      interview_mode?: string | null
+      expires_at?: string | null
+      max_uses?: number | null
+      used_count?: number | null
+    }
+
+    const getCodeObject = (value: unknown): InterviewCodeData | null => {
+      if (!value || typeof value !== 'object') return null
+      return value as InterviewCodeData
+    }
+
+    const getMaybeCode = (value: unknown): InterviewCodeData | null => {
+      if (Array.isArray(value)) {
+        return getCodeObject(value[0])
+      }
+      return getCodeObject(value)
+    }
+
+    const nowIso = new Date().toISOString()
+    let interviewCodeData: InterviewCodeData | null = null
+    let candidateInvitationUsed = false
+
+    if (codeId) {
+      const { data: explicitCode } = await supabase
+        .from('interview_codes')
+        .select('id, job_id, interview_duration, recording_enabled, interview_mode, expires_at, max_uses, used_count')
+        .eq('id', codeId)
+        .maybeSingle()
+
+      const explicit = explicitCode as InterviewCodeData | null
+      if (!explicit || explicit.job_id !== jobId) {
+        return { status: 400, body: { error: 'Invalid interview link' } }
+      }
+
+      const { data: candidateInvitation } = await supabase
+        .from('candidate_invitations')
+        .select('code_used')
+        .eq('candidate_id', candidateId)
+        .eq('interview_code_id', codeId)
+        .order('invited_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      candidateInvitationUsed = Boolean(candidateInvitation?.code_used)
+
+      if (explicit.expires_at && new Date(explicit.expires_at).toISOString() <= nowIso) {
+        return { status: 400, body: { error: 'Interview code has expired' } }
+      }
+
+      if (
+        explicit.max_uses !== null &&
+        explicit.max_uses !== undefined &&
+        (explicit.used_count ?? 0) >= explicit.max_uses &&
+        (!candidateInvitationUsed || hasPriorInterview)
+      ) {
+        return { status: 400, body: { error: 'Interview code has already been used' } }
+      }
+
+      interviewCodeData = explicit
+    } else {
+      const { data: pendingInvitation } = await supabase
+        .from('candidate_invitations')
+        .select(
+          'interview_codes (id, job_id, interview_duration, recording_enabled, interview_mode, expires_at, max_uses, used_count)'
+        )
+        .eq('candidate_id', candidateId)
+        .eq('job_id', jobId)
+        .eq('code_used', false)
+        .order('invited_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const pendingCode = getMaybeCode((pendingInvitation as { interview_codes?: unknown } | null)?.interview_codes)
+      if (!pendingCode || pendingCode.job_id !== jobId) {
+        return { status: 400, body: { error: 'Invalid interview link' } }
+      }
+
+      if (pendingCode.expires_at && new Date(pendingCode.expires_at).toISOString() <= nowIso) {
+        return { status: 400, body: { error: 'Interview code has expired' } }
+      }
+
+      if (
+        pendingCode.max_uses !== null &&
+        pendingCode.max_uses !== undefined &&
+        (pendingCode.used_count ?? 0) >= pendingCode.max_uses
+      ) {
+        return { status: 400, body: { error: 'Interview code has already been used' } }
+      }
+
+      interviewCodeData = pendingCode
+    }
+
+    if (!interviewCodeData) {
+      return { status: 400, body: { error: 'Invalid interview link' } }
+    }
+
     const interviewDurationFromCode = interviewCodeData?.interview_duration
     const interviewDuration = interviewDurationFromCode ?? DEFAULT_INTERVIEW_DURATION_MINUTES
 
@@ -97,55 +186,11 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
       }
     }
 
-    const finalInterviewMode = normalizeInterviewMode(candidateData.interview_mode || interviewMode)
+    const finalInterviewMode = normalizeInterviewMode(
+      interviewCodeData?.interview_mode || candidateData.interview_mode || interviewMode
+    )
 
-    const creditCheck = await checkCredits(supabase, candidateData.company_id, interviewDuration)
-    if (!creditCheck.hasCredits) {
-      return {
-        status: 402,
-        body: {
-          error: 'Insufficient credits',
-          message: creditCheck.message,
-          remaining: creditCheck.remaining,
-          required: creditCheck.required,
-        },
-      }
-    }
     const recordingEnabled = interviewCodeData?.recording_enabled ?? true
-
-    const { data: existingInterview } = await supabase
-      .from('interviews')
-      .select('id, status, transcript, interview_mode, conversation_state')
-      .eq('candidate_id', candidateId)
-      .eq('job_id', jobId)
-      .eq('status', 'in-progress')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (existingInterview) {
-      const existing = existingInterview as unknown as {
-        id: string
-        transcript: unknown
-        interview_mode: string | null
-        conversation_state: unknown
-      }
-
-      const transcript = Array.isArray(existing.transcript) ? existing.transcript : []
-      const normalizedMode = normalizeInterviewMode(existing.interview_mode)
-
-      return {
-        status: 200,
-        body: {
-          interviewId: existing.id,
-          existing: true,
-          interviewMode: normalizedMode,
-          answeredQuestions: transcript.length,
-          transcript,
-          conversationState: existing.conversation_state || null,
-        },
-      }
-    }
 
     const now = new Date().toISOString()
     const interviewInsert = {
