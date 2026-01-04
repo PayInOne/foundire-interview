@@ -33,6 +33,9 @@ export async function sendInterviewReport({
 
   const subject = t(messages as unknown as Record<string, unknown>, 'email.interviewReport.subject', { candidateName, jobTitle })
   const recommendationLabel = t(messages as unknown as Record<string, unknown>, `email.interviewReport.recommendations.${recommendation}`)
+  const brandTagline = locale.startsWith('zh')
+    ? '从寻才到 Offer 的 AI 招聘工作流'
+    : 'AI hiring workflow from sourcing to offer'
 
   const getScoreColor = (value: number) => {
     if (value >= 80) return '#22c55e'
@@ -50,7 +53,7 @@ export async function sendInterviewReport({
           </span>
         </div>
         <p style="color: #00F0FF; font-size: 13px; letter-spacing: 2px; margin: 0; font-weight: 600; opacity: 0.9;">
-          HIRE LIKE A FOUNDER
+          ${brandTagline}
         </p>
       </div>
 
@@ -157,4 +160,3 @@ ${getUnsubscribeFooter(messages).text}
 
   return { success: true, messageId: info.messageId }
 }
-

@@ -72,6 +72,7 @@ function getEmailContent(
     goodLuck: string
     regards: string
     team: string
+    tagline: string
   }> = {
     en: {
       subject: is24h
@@ -97,6 +98,7 @@ function getEmailContent(
       goodLuck: 'Good luck with your interview!',
       regards: 'Best regards,',
       team: `The Hiring Team at ${companyName}`,
+      tagline: 'AI hiring workflow from sourcing to offer',
     },
     zh: {
       subject: is24h
@@ -122,6 +124,7 @@ function getEmailContent(
       goodLuck: '祝您面试顺利！',
       regards: '此致，',
       team: `${companyName} 招聘团队`,
+      tagline: '从寻才到 Offer 的 AI 招聘工作流',
     },
     es: {
       subject: is24h
@@ -147,6 +150,7 @@ function getEmailContent(
       goodLuck: '¡Buena suerte con tu entrevista!',
       regards: 'Saludos cordiales,',
       team: `El Equipo de Contratación de ${companyName}`,
+      tagline: 'Flujo de contratación con IA desde la búsqueda hasta la oferta',
     },
     fr: {
       subject: is24h
@@ -172,6 +176,7 @@ function getEmailContent(
       goodLuck: 'Bonne chance pour votre entretien!',
       regards: 'Cordialement,',
       team: `L'Équipe de Recrutement de ${companyName}`,
+      tagline: "Flux de recrutement IA du sourcing à l'offre",
     },
   }
 
@@ -188,7 +193,7 @@ function getEmailContent(
           </span>
         </div>
         <p style="color: #00F0FF; font-size: 13px; letter-spacing: 2px; margin: 0; font-weight: 600; opacity: 0.9;">
-          HIRE LIKE A FOUNDER
+          ${c.tagline}
         </p>
       </div>
 

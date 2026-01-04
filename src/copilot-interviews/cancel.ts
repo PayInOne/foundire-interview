@@ -153,7 +153,7 @@ export async function handleCancelCopilotInterview(
           apology: '对此给您带来的不便，我们深表歉意。如有任何疑问，请联系招聘团队。',
           regards: '此致，',
           team: `${companyName} 招聘团队`,
-          tagline: '像创始人一样招聘',
+          tagline: '从寻才到 Offer 的 AI 招聘工作流',
         },
         en: {
           subject: `${companyName} - Interview Cancelled - ${jobTitle}`,
@@ -166,7 +166,7 @@ export async function handleCancelCopilotInterview(
           apology: 'We apologize for any inconvenience this may have caused. Please contact the hiring team if you have any questions.',
           regards: 'Best regards,',
           team: `The Hiring Team at ${companyName}`,
-          tagline: 'HIRE LIKE A FOUNDER',
+          tagline: 'AI hiring workflow from sourcing to offer',
         },
         es: {
           subject: `${companyName} - Entrevista Cancelada - ${jobTitle}`,
@@ -179,7 +179,7 @@ export async function handleCancelCopilotInterview(
           apology: 'Pedimos disculpas por las molestias que esto pueda haber causado. Por favor contacta al equipo de contratación si tienes alguna pregunta.',
           regards: 'Saludos cordiales,',
           team: `El Equipo de Contratación de ${companyName}`,
-          tagline: 'CONTRATA COMO UN FUNDADOR',
+          tagline: 'Flujo de contratación con IA desde la búsqueda hasta la oferta',
         },
         fr: {
           subject: `${companyName} - Entretien Annulé - ${jobTitle}`,
@@ -192,7 +192,7 @@ export async function handleCancelCopilotInterview(
           apology: 'Nous nous excusons pour tout inconvénient que cela a pu causer. Veuillez contacter l\'équipe de recrutement si vous avez des questions.',
           regards: 'Cordialement,',
           team: `L'Équipe de Recrutement de ${companyName}`,
-          tagline: 'RECRUTEZ COMME UN FONDATEUR',
+          tagline: "Flux de recrutement IA du sourcing à l'offre",
         },
       }
 

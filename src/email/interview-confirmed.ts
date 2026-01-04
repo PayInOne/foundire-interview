@@ -124,10 +124,10 @@ export async function sendInterviewConfirmedEmail({
   const formattedScheduledTime = formatDateTime(scheduledAt, locale, candidateTimezone)
 
   const taglines: Record<typeof locale, string> = {
-    en: 'HIRE LIKE A FOUNDER',
-    zh: '像创始人一样招聘',
-    es: 'CONTRATA COMO UN FUNDADOR',
-    fr: 'RECRUTEZ COMME UN FONDATEUR',
+    en: 'AI hiring workflow from sourcing to offer',
+    zh: '从寻才到 Offer 的 AI 招聘工作流',
+    es: 'Flujo de contratación con IA desde la búsqueda hasta la oferta',
+    fr: "Flux de recrutement IA du sourcing à l'offre",
   }
 
   const html = `
