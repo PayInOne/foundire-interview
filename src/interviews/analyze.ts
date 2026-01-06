@@ -24,6 +24,7 @@ interface InterviewAnalyzeDetails {
     name: string
     email: string
     resume_url: string | null
+    source: string | null
   } | null
   jobs: {
     title: string
@@ -31,6 +32,7 @@ interface InterviewAnalyzeDetails {
     requirements: string | null
     companies: {
       name: string
+      slug: string | null
     } | null
   } | null
 }
@@ -132,14 +134,16 @@ export async function processInterviewAnalyzeTask({
         id,
         name,
         email,
-        resume_url
+        resume_url,
+        source
       ),
       jobs (
         title,
         description,
         requirements,
         companies (
-          name
+          name,
+          slug
         )
       )
     `)
@@ -162,6 +166,9 @@ export async function processInterviewAnalyzeTask({
   if (!candidate || !job || !job.companies) {
     throw new Error('Interview is missing related candidate/job/company data')
   }
+
+  const isTalentApplicant =
+    candidate.source === 'talent_applicant' || job.companies?.slug === 'foundire-talent'
 
   const transcript = parseTranscript(interviewData.transcript)
 
@@ -194,53 +201,55 @@ export async function processInterviewAnalyzeTask({
     })
 
   // Final credit deduction
-  try {
-    const { data: interviewRecord } = await supabase
-      .from('interviews')
-      .select('started_at, credits_deducted, completed_at')
-      .eq('id', interviewId)
-      .single()
+  if (!isTalentApplicant) {
+    try {
+      const { data: interviewRecord } = await supabase
+        .from('interviews')
+        .select('started_at, credits_deducted, completed_at')
+        .eq('id', interviewId)
+        .single()
 
-    const record = interviewRecord as unknown as { started_at: string | null; credits_deducted: number | null; completed_at: string | null } | null
-    if (record?.started_at) {
-      const startedAt = new Date(record.started_at)
-      const completedAtStr = record.completed_at || (interviewUpdate as { completed_at?: string }).completed_at
+      const record = interviewRecord as unknown as { started_at: string | null; credits_deducted: number | null; completed_at: string | null } | null
+      if (record?.started_at) {
+        const startedAt = new Date(record.started_at)
+        const completedAtStr = record.completed_at || (interviewUpdate as { completed_at?: string }).completed_at
 
-      if (completedAtStr) {
-        const completedAt = new Date(completedAtStr)
-        if (completedAt > startedAt) {
-          const totalMinutes = Math.ceil((completedAt.getTime() - startedAt.getTime()) / 1000 / 60)
-          const alreadyDeducted = record.credits_deducted || 0
-          const remaining = totalMinutes - alreadyDeducted
+        if (completedAtStr) {
+          const completedAt = new Date(completedAtStr)
+          if (completedAt > startedAt) {
+            const totalMinutes = Math.ceil((completedAt.getTime() - startedAt.getTime()) / 1000 / 60)
+            const alreadyDeducted = record.credits_deducted || 0
+            const remaining = totalMinutes - alreadyDeducted
 
-          if (remaining > 0) {
-            const deductResult = await deductCredits(
-              {
-                companyId: interviewData.company_id,
-                amount: remaining,
-                type: 'interview_minute',
-                referenceId: interviewId,
-                referenceType: 'interview',
-                description: `Interview completed: final ${remaining} minute(s)`,
-              },
-              supabase
-            )
+            if (remaining > 0) {
+              const deductResult = await deductCredits(
+                {
+                  companyId: interviewData.company_id,
+                  amount: remaining,
+                  type: 'interview_minute',
+                  referenceId: interviewId,
+                  referenceType: 'interview',
+                  description: `Interview completed: final ${remaining} minute(s)`,
+                },
+                supabase
+              )
 
-            if (deductResult.success) {
-              await supabase
-                .from('interviews')
-                .update({ credits_deducted: totalMinutes })
-                .eq('id', interviewId)
+              if (deductResult.success) {
+                await supabase
+                  .from('interviews')
+                  .update({ credits_deducted: totalMinutes })
+                  .eq('id', interviewId)
+              }
             }
           }
         }
       }
+    } catch (creditError) {
+      console.error('Error processing final credits:', creditError)
     }
-  } catch (creditError) {
-    console.error('Error processing final credits:', creditError)
   }
 
-  if (sendEmail) {
+  if (sendEmail && !isTalentApplicant) {
     try {
       const { data: savedInterview } = await supabase
         .from('interviews')
@@ -308,4 +317,3 @@ export async function processInterviewAnalyzeTask({
 
   return { status: 'completed', interviewId, score: analysis.score }
 }
-

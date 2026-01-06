@@ -1,7 +1,8 @@
 import { createAdminClient } from '../supabase/admin'
 import type { LiveKitRegion } from '../livekit/geo-routing'
 import { normalizeInterviewDurationMinutes } from './constants'
-import { processHeartbeatBillingWithAutoEnd } from './heartbeat-billing'
+import { handleInterviewAutoEnd, processHeartbeatBillingWithAutoEnd } from './heartbeat-billing'
+import { isTalentApplicantCandidate } from './talent'
 
 export type HeartbeatResponse =
   | { status: 200; body: Record<string, unknown> }
@@ -63,6 +64,66 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
   }
 
   const interviewDurationMinutes = normalizeInterviewDurationMinutes(record.interview_duration)
+
+  const isTalentApplicant = await isTalentApplicantCandidate(supabase, record.candidate_id)
+  if (isTalentApplicant) {
+    const now = new Date()
+    const minutesElapsed = effectiveStartedAt
+      ? Math.ceil((now.getTime() - effectiveStartedAt.getTime()) / 1000 / 60)
+      : 0
+
+    await supabase
+      .from('interviews')
+      .update({ last_active_at: now.toISOString() })
+      .eq('id', interviewId)
+
+    if (interviewDurationMinutes && minutesElapsed > 0) {
+      const bufferMinutes = 2
+      if (minutesElapsed >= interviewDurationMinutes + bufferMinutes) {
+        await handleInterviewAutoEnd({
+          interviewId,
+          candidateId: record.candidate_id ?? undefined,
+          supabase,
+          reason: 'duration_exceeded',
+          livekitRoomName: record.livekit_room_name ?? undefined,
+          livekitRegion: (record.livekit_region as LiveKitRegion | null) ?? null,
+        })
+
+        return {
+          status: 200,
+          body: {
+            success: true,
+            status: 'completed',
+            minutesElapsed,
+            creditsDeducted: 0,
+            newBalance: 0,
+            creditWarning: null,
+            autoEnded: true,
+            autoEndReason: 'duration_exceeded',
+            message: 'Interview ended automatically due to duration limit exceeded',
+            companyId: record.company_id,
+            interviewDuration: interviewDurationMinutes,
+            startedAt: effectiveStartedAt?.toISOString() ?? null,
+          },
+        }
+      }
+    }
+
+    return {
+      status: 200,
+      body: {
+        success: true,
+        status: record.status,
+        minutesElapsed,
+        creditsDeducted: 0,
+        newBalance: 0,
+        creditWarning: null,
+        companyId: record.company_id,
+        interviewDuration: interviewDurationMinutes,
+        startedAt: effectiveStartedAt?.toISOString() ?? null,
+      },
+    }
+  }
 
   const billingResult = await processHeartbeatBillingWithAutoEnd({
     interviewId,

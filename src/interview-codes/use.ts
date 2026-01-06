@@ -8,6 +8,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function normalizeIpAddress(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.split(',')[0]?.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unknown') return null
+  return trimmed
+}
+
 export async function handleUseInterviewCode(body: unknown): Promise<UseInterviewCodeResponse> {
   const record = isRecord(body) ? body : null
 
@@ -17,7 +24,7 @@ export async function handleUseInterviewCode(body: unknown): Promise<UseIntervie
   const candidateName = typeof record?.candidateName === 'string' ? record.candidateName : null
   const success = typeof record?.success === 'boolean' ? record.success : true
   const errorMessage = typeof record?.errorMessage === 'string' ? record.errorMessage : null
-  const ipAddress = typeof record?.ipAddress === 'string' ? record.ipAddress : 'unknown'
+  const ipAddress = normalizeIpAddress(record?.ipAddress)
   const userAgent = typeof record?.userAgent === 'string' ? record.userAgent : 'unknown'
 
   if (!codeId) {
@@ -53,7 +60,7 @@ export async function handleUseInterviewCode(body: unknown): Promise<UseIntervie
       candidate_id: candidateId,
       candidate_email: candidateEmail,
       candidate_name: candidateName,
-      ip_address: ipAddress || null,
+      ip_address: ipAddress,
       user_agent: userAgent,
       success,
       error_message: errorMessage,

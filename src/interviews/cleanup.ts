@@ -60,10 +60,47 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
       }
     }
 
+    const candidateIds = rows
+      .map((row) => row.candidate_id)
+      .filter((candidateId): candidateId is string => Boolean(candidateId))
+    const candidateSourceMap = new Map<string, string | null>()
+    const companyIds = Array.from(new Set(rows.map((row) => row.company_id)))
+    const companySlugMap = new Map<string, string | null>()
+
+    if (candidateIds.length > 0) {
+      const { data: candidates } = await supabase
+        .from('candidates')
+        .select('id, source')
+        .in('id', candidateIds)
+
+      if (Array.isArray(candidates)) {
+        candidates.forEach((candidate) => {
+          candidateSourceMap.set(candidate.id, candidate.source ?? null)
+        })
+      }
+    }
+
+    if (companyIds.length > 0) {
+      const { data: companies } = await supabase
+        .from('companies')
+        .select('id, slug')
+        .in('id', companyIds)
+
+      if (Array.isArray(companies)) {
+        companies.forEach((company) => {
+          companySlugMap.set(company.id, company.slug ?? null)
+        })
+      }
+    }
+
     const results: Array<Record<string, unknown>> = []
 
     for (const interview of rows) {
       try {
+        const companySlug = companySlugMap.get(interview.company_id)
+        const isTalentApplicant = interview.candidate_id
+          ? candidateSourceMap.get(interview.candidate_id) === 'talent_applicant' || companySlug === 'foundire-talent'
+          : companySlug === 'foundire-talent'
         const startedAt = interview.started_at ? new Date(interview.started_at) : null
         const completedAt = interview.last_active_at ? new Date(interview.last_active_at) : new Date()
 
@@ -115,15 +152,16 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
         }
 
         let creditDeductionResult: { success: boolean; newBalance: number } | null = null
-        if (remainingCredits > 0) {
+        const creditsToDeduct = isTalentApplicant ? 0 : remainingCredits
+        if (creditsToDeduct > 0) {
           creditDeductionResult = await deductCredits(
             {
               companyId: interview.company_id,
-              amount: remainingCredits,
+              amount: creditsToDeduct,
               type: 'interview_minute',
               referenceId: interview.id,
               referenceType: 'interview',
-              description: `Interview abandoned: final ${remainingCredits} minute(s)`,
+              description: `Interview abandoned: final ${creditsToDeduct} minute(s)`,
             },
             supabase
           )
@@ -158,7 +196,7 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
           success: true,
           totalMinutes,
           alreadyDeducted,
-          creditsDeducted: remainingCredits,
+          creditsDeducted: creditsToDeduct,
           creditDeductionSuccess: creditDeductionResult?.success ?? true,
           newBalance: creditDeductionResult?.newBalance ?? 0,
           roomDeleted,
