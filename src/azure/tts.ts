@@ -10,6 +10,7 @@ export async function handleAzureTts(body: unknown): Promise<AzureTtsResponse> {
     const record = asRecord(body) ?? {}
     const text = getOptionalString(record, 'text') || ''
     const language = getOptionalString(record, 'language') || 'en-US'
+    const requestedVoice = getOptionalString(record, 'voice') || ''
     const rate = getOptionalString(record, 'rate') || 'medium'
     const pitch = getOptionalString(record, 'pitch') || 'medium'
 
@@ -31,9 +32,17 @@ export async function handleAzureTts(body: unknown): Promise<AzureTtsResponse> {
       'zh-TW': 'zh-TW-HsiaoChenNeural',
       en: 'en-US-JennyNeural',
       'en-US': 'en-US-JennyNeural',
+      es: 'es-ES-ElviraNeural',
+      'es-ES': 'es-ES-ElviraNeural',
+      fr: 'fr-FR-DeniseNeural',
+      'fr-FR': 'fr-FR-DeniseNeural',
     }
 
-    const voiceName = voiceMap[language] || voiceMap.en
+    const trimmedVoice = requestedVoice.trim()
+    const safeVoice =
+      trimmedVoice && /^[A-Za-z0-9-]+$/.test(trimmedVoice) ? trimmedVoice : null
+
+    const voiceName = safeVoice || voiceMap[language] || voiceMap.en
 
     const rateMap: Record<string, string> = {
       slow: '-20%',

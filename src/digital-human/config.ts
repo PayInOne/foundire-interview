@@ -10,6 +10,51 @@ function getProviderType(): DigitalHumanProviderType {
   return 'did'
 }
 
+const FEMALE_TTS_VOICE_MAP: Record<string, string> = {
+  zh: 'zh-CN-XiaoxiaoNeural',
+  'zh-CN': 'zh-CN-XiaoxiaoNeural',
+  'zh-TW': 'zh-TW-HsiaoChenNeural',
+  en: 'en-US-JennyNeural',
+  'en-US': 'en-US-JennyNeural',
+  es: 'es-ES-ElviraNeural',
+  'es-ES': 'es-ES-ElviraNeural',
+  fr: 'fr-FR-DeniseNeural',
+  'fr-FR': 'fr-FR-DeniseNeural',
+}
+
+const MALE_TTS_VOICE_MAP: Record<string, string> = {
+  zh: 'zh-CN-YunxiNeural',
+  'zh-CN': 'zh-CN-YunxiNeural',
+  'zh-TW': 'zh-TW-YunJheNeural',
+  en: 'en-US-GuyNeural',
+  'en-US': 'en-US-GuyNeural',
+  es: 'es-ES-AlvaroNeural',
+  'es-ES': 'es-ES-AlvaroNeural',
+  fr: 'fr-FR-HenriNeural',
+  'fr-FR': 'fr-FR-HenriNeural',
+}
+
+function resolveInterviewerTtsVoice(language?: string): string | undefined {
+  const override = process.env.AI_INTERVIEWER_TTS_VOICE?.trim()
+  if (override) return override
+
+  const normalized = language?.toLowerCase() || ''
+  const genderOverride = process.env.AI_INTERVIEWER_GENDER?.toLowerCase()
+  const isZh = normalized.startsWith('zh')
+
+  const voiceMap =
+    genderOverride === 'male'
+      ? MALE_TTS_VOICE_MAP
+      : genderOverride === 'female'
+        ? FEMALE_TTS_VOICE_MAP
+        : isZh
+          ? FEMALE_TTS_VOICE_MAP
+          : MALE_TTS_VOICE_MAP
+
+  const key = language || (isZh ? 'zh' : 'en')
+  return voiceMap[key] || voiceMap.en
+}
+
 function buildDidConfig(): { provider: 'did'; config: Record<string, unknown> } | null {
   const agentId = process.env.DID_AGENT_ID
   const clientKey = process.env.DID_CLIENT_KEY
@@ -39,6 +84,7 @@ function buildHeygenConfig(params: {
   const interviewMode = params.interviewMode
 
   let avatarId = process.env.HEYGEN_AVATAR_ID
+  const ttsVoice = resolveInterviewerTtsVoice(language)
 
   if (!avatarId && language) {
     if (language.toLowerCase().startsWith('zh')) {
@@ -57,6 +103,7 @@ function buildHeygenConfig(params: {
       language,
       candidateName,
       interviewMode,
+      ...(ttsVoice ? { voice: ttsVoice } : {}),
     },
   }
 }
@@ -112,4 +159,3 @@ export async function handleDigitalHumanConfig(params: {
     return { status: 500, body: { error: message } }
   }
 }
-
