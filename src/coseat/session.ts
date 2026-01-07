@@ -44,7 +44,7 @@ export async function handleStartCoseatSession(body: unknown): Promise<CoseatSes
     ) {
       return {
         status: 400,
-        body: { success: false, error: 'Interview duration must be 15, 30, 45, or 60 minutes' },
+        body: { success: false, error: 'Interview duration must be 15, 20, 30, 45, or 60 minutes' },
       }
     }
 
@@ -397,4 +397,3 @@ export async function handleUploadCoseatRecording(payload: UploadRecordingPayloa
     return { status: 500, body: { success: false, error: 'Internal server error' } }
   }
 }
-

@@ -36,7 +36,7 @@ export async function handleScheduleCoseatInterview(body: unknown): Promise<Cose
     ) {
       return {
         status: 400,
-        body: { success: false, error: 'Interview duration must be 15, 30, 45, or 60 minutes' },
+        body: { success: false, error: 'Interview duration must be 15, 20, 30, 45, or 60 minutes' },
       }
     }
 

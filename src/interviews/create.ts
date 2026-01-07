@@ -1,5 +1,5 @@
 import { createAdminClient } from '../supabase/admin'
-import { normalizeInterviewMode } from '../interview/modes'
+import { INTERVIEW_MODES, normalizeInterviewMode } from '../interview/modes'
 import {
   DEFAULT_INTERVIEW_DURATION_MINUTES,
   isAllowedInterviewDurationMinutes,
@@ -7,7 +7,9 @@ import {
 
 export type CreateInterviewResponse =
   | { status: 200; body: Record<string, unknown> }
-  | { status: 400 | 404 | 500; body: { error: string; [key: string]: unknown } }
+  | { status: 400 | 404 | 409 | 500; body: { error: string; [key: string]: unknown } }
+
+const MAX_APPLICANT_INTERVIEW_ATTEMPTS = 3
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -30,7 +32,7 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
 
     const { data: candidate, error: candidateError } = await supabase
       .from('candidates')
-      .select('id, company_id, interview_mode')
+      .select('id, company_id, interview_mode, source')
       .eq('id', candidateId)
       .eq('job_id', jobId)
       .single()
@@ -39,7 +41,12 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
       return { status: 404, body: { error: 'Candidate not found' } }
     }
 
-    const candidateData = candidate as unknown as { id: string; company_id: string; interview_mode?: string | null }
+    const candidateData = candidate as unknown as {
+      id: string
+      company_id: string
+      interview_mode?: string | null
+      source?: string | null
+    }
 
     const { data: latestInterview } = await supabase
       .from('interviews')
@@ -181,7 +188,7 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
       if (!isAllowedInterviewDurationMinutes(interviewDurationFromCode)) {
         return {
           status: 400,
-          body: { error: 'Interview duration must be 15, 30, 45, or 60 minutes' },
+          body: { error: 'Interview duration must be 15, 20, 30, 45, or 60 minutes' },
         }
       }
     }
@@ -189,6 +196,27 @@ export async function handleCreateInterview(body: unknown): Promise<CreateInterv
     const finalInterviewMode = normalizeInterviewMode(
       interviewCodeData?.interview_mode || candidateData.interview_mode || interviewMode
     )
+
+    if (
+      candidateData.source === 'talent_applicant' &&
+      (finalInterviewMode === INTERVIEW_MODES.AI_DIALOGUE || finalInterviewMode === INTERVIEW_MODES.AI_QA)
+    ) {
+      const { count: attemptCount, error: attemptError } = await supabase
+        .from('interviews')
+        .select('id', { count: 'exact', head: true })
+        .eq('candidate_id', candidateId)
+        .eq('job_id', jobId)
+        .in('interview_mode', [INTERVIEW_MODES.AI_DIALOGUE, INTERVIEW_MODES.AI_QA])
+
+      if (attemptError) {
+        console.error('Error checking applicant interview attempts:', attemptError)
+        return { status: 500, body: { error: 'Failed to verify interview attempts' } }
+      }
+
+      if ((attemptCount ?? 0) >= MAX_APPLICANT_INTERVIEW_ATTEMPTS) {
+        return { status: 409, body: { error: 'Interview attempt limit reached' } }
+      }
+    }
 
     const recordingEnabled = interviewCodeData?.recording_enabled ?? true
 

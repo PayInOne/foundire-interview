@@ -168,7 +168,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
     }
 
     if (interviewDurationRaw !== undefined && interviewDurationRaw !== null && !isAllowedInterviewDurationMinutes(interviewDurationRaw)) {
-      return { status: 400, body: { success: false, error: 'Interview duration must be 15, 30, 45, or 60 minutes' } }
+      return { status: 400, body: { success: false, error: 'Interview duration must be 15, 20, 30, 45, or 60 minutes' } }
     }
 
     const finalInterviewDuration =
