@@ -70,15 +70,22 @@ export async function handleExtendCopilotInterview(
 
     const meta = copilotInterview as { interview_id: string; company_id: string; room_status: string }
 
+    const { data: participant } = await adminSupabase
+      .from('copilot_interview_participants')
+      .select('id')
+      .eq('copilot_interview_id', copilotInterviewId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
     const { data: isMember } = await adminSupabase
       .from('company_members')
       .select('id')
       .eq('company_id', meta.company_id)
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
-    if (!isMember) {
-      return { status: 403, body: { error: 'You are not a member of this company' } }
+    if (!participant && !isMember) {
+      return { status: 403, body: { error: 'You are not permitted to extend this interview' } }
     }
 
     const allowedStatuses = ['waiting_interviewer', 'waiting_candidate', 'both_ready', 'in_progress']
@@ -161,4 +168,3 @@ export async function handleExtendCopilotInterview(
     return { status: 500, body: { error: 'Internal server error' } }
   }
 }
-
