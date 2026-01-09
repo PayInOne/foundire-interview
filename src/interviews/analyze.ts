@@ -17,6 +17,7 @@ interface InterviewAnalyzeDetails {
   completed_at: string | null
   company_id: string
   credits_deducted: number
+  interview_mode: string | null
   score: number | null
   ai_analysis: unknown | null
   candidates: {
@@ -128,6 +129,7 @@ export async function processInterviewAnalyzeTask({
       completed_at,
       company_id,
       credits_deducted,
+      interview_mode,
       score,
       ai_analysis,
       candidates (
@@ -169,6 +171,8 @@ export async function processInterviewAnalyzeTask({
 
   const isTalentApplicant =
     candidate.source === 'talent_applicant' || job.companies?.slug === 'foundire-talent'
+  const isAiDialogue = interviewData.interview_mode === 'ai_dialogue' || interviewData.interview_mode === 'ai_qa'
+  const isFreeInterview = isAiDialogue || isTalentApplicant
 
   const transcript = parseTranscript(interviewData.transcript)
 
@@ -201,7 +205,7 @@ export async function processInterviewAnalyzeTask({
     })
 
   // Final credit deduction
-  if (!isTalentApplicant) {
+  if (!isFreeInterview) {
     try {
       const { data: interviewRecord } = await supabase
         .from('interviews')

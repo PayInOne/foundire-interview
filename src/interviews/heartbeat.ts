@@ -21,7 +21,7 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
   ;({ data: interview, error: fetchError } = await supabase
     .from('interviews')
     .select(
-      'started_at, company_id, candidate_id, credits_deducted, status, interview_duration, livekit_room_name, livekit_region'
+      'started_at, company_id, candidate_id, credits_deducted, status, interview_duration, interview_mode, livekit_room_name, livekit_region'
     )
     .eq('id', interviewId)
     .single())
@@ -29,7 +29,7 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
   if (fetchError?.code === '42703') {
     ;({ data: interview, error: fetchError } = await supabase
       .from('interviews')
-      .select('started_at, company_id, candidate_id, credits_deducted, status, interview_duration, livekit_room_name')
+      .select('started_at, company_id, candidate_id, credits_deducted, status, interview_duration, interview_mode, livekit_room_name')
       .eq('id', interviewId)
       .single())
   }
@@ -45,6 +45,7 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
     credits_deducted: number | null
     status: string | null
     interview_duration: unknown
+    interview_mode: string | null
     livekit_room_name: string | null
     livekit_region?: unknown
   }
@@ -65,8 +66,9 @@ export async function handleInterviewHeartbeat(interviewId: string): Promise<Hea
 
   const interviewDurationMinutes = normalizeInterviewDurationMinutes(record.interview_duration)
 
-  const isTalentApplicant = await isTalentApplicantCandidate(supabase, record.candidate_id)
-  if (isTalentApplicant) {
+  const isAiDialogue = record.interview_mode === 'ai_dialogue' || record.interview_mode === 'ai_qa'
+  const isFreeInterview = isAiDialogue || await isTalentApplicantCandidate(supabase, record.candidate_id)
+  if (isFreeInterview) {
     const now = new Date()
     const minutesElapsed = effectiveStartedAt
       ? Math.ceil((now.getTime() - effectiveStartedAt.getTime()) / 1000 / 60)

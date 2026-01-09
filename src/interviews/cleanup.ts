@@ -19,6 +19,7 @@ type InterviewRow = {
   started_at: string | null
   last_active_at: string | null
   credits_deducted: number | null
+  interview_mode: string | null
   livekit_room_name: string | null
   livekit_region?: unknown
 }
@@ -34,7 +35,7 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
     ;({ data: abandonedInterviews, error: fetchError } = await supabase
       .from('interviews')
       .select(
-        'id, company_id, candidate_id, started_at, last_active_at, credits_deducted, livekit_room_name, livekit_region'
+        'id, company_id, candidate_id, started_at, last_active_at, credits_deducted, interview_mode, livekit_room_name, livekit_region'
       )
       .eq('status', 'in-progress')
       .or(`last_active_at.lt.${fiveMinutesAgo},last_active_at.is.null`))
@@ -42,7 +43,7 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
     if (fetchError?.code === '42703') {
       ;({ data: abandonedInterviews, error: fetchError } = await supabase
         .from('interviews')
-        .select('id, company_id, candidate_id, started_at, last_active_at, credits_deducted, livekit_room_name')
+        .select('id, company_id, candidate_id, started_at, last_active_at, credits_deducted, interview_mode, livekit_room_name')
         .eq('status', 'in-progress')
         .or(`last_active_at.lt.${fiveMinutesAgo},last_active_at.is.null`))
     }
@@ -101,6 +102,8 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
         const isTalentApplicant = interview.candidate_id
           ? candidateSourceMap.get(interview.candidate_id) === 'talent_applicant' || companySlug === 'foundire-talent'
           : companySlug === 'foundire-talent'
+        const isAiDialogue = interview.interview_mode === 'ai_dialogue' || interview.interview_mode === 'ai_qa'
+        const isFreeInterview = isAiDialogue || isTalentApplicant
         const startedAt = interview.started_at ? new Date(interview.started_at) : null
         const completedAt = interview.last_active_at ? new Date(interview.last_active_at) : new Date()
 
@@ -152,7 +155,7 @@ export async function handleCleanupStandardInterviews(): Promise<CleanupStandard
         }
 
         let creditDeductionResult: { success: boolean; newBalance: number } | null = null
-        const creditsToDeduct = isTalentApplicant ? 0 : remainingCredits
+        const creditsToDeduct = isFreeInterview ? 0 : remainingCredits
         if (creditsToDeduct > 0) {
           creditDeductionResult = await deductCredits(
             {
