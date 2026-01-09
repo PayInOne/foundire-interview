@@ -1,5 +1,6 @@
 import { handleCreateCopilotInterview } from '../../copilot-interviews/create'
 import { handleScheduleCopilotInterview, handleGetCopilotSchedule } from '../../copilot-interviews/schedule'
+import { handleRescheduleCopilotInterview } from '../../copilot-interviews/reschedule'
 import { handleConfirmCopilotInterview, handleGetCopilotConfirmInfo } from '../../copilot-interviews/confirm'
 import { handleDeclineCopilotInterview } from '../../copilot-interviews/decline'
 import { handleSendInterviewReminders, handleCheckMissedInterviews } from '../../copilot-interviews/reminders'
@@ -36,6 +37,13 @@ export const handleCopilotInterviewRoutes: RouteHandler = async ({ req, res, met
   if (method === 'POST' && pathname === '/internal/copilot-interviews/schedule') {
     const body = await readJsonBody(req)
     const response = await handleScheduleCopilotInterview(body)
+    sendJson(res, response.status, response.body)
+    return true
+  }
+
+  if (method === 'POST' && pathname === '/internal/copilot-interviews/reschedule') {
+    const body = await readJsonBody(req)
+    const response = await handleRescheduleCopilotInterview(body)
     sendJson(res, response.status, response.body)
     return true
   }
