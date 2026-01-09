@@ -61,6 +61,13 @@ export interface AIAnalysis {
   overall_assessment: string
   strengths: string[]
   weaknesses: string[]
+  preset_question_evaluations?: Array<{
+    question: string
+    expected_answer: string
+    candidate_answer_summary: string
+    alignment_score: number
+    notes: string
+  }>
   technical_skills: Array<{
     skill: string
     level: 'beginner' | 'intermediate' | 'advanced' | 'expert'
@@ -78,4 +85,3 @@ export interface AIAnalysis {
   recommendation: 'strong_yes' | 'yes' | 'maybe' | 'no' | 'strong_no'
   red_flags?: string[]
 }
-

@@ -31,6 +31,7 @@ interface InterviewAnalyzeDetails {
     title: string
     description: string | null
     requirements: string | null
+    questions?: unknown
     companies: {
       name: string
       slug: string | null
@@ -93,6 +94,36 @@ function parseTranscript(rawTranscript: unknown): InterviewTranscriptData {
   return []
 }
 
+type PresetQuestionExpectation = {
+  question: string
+  expectedAnswer: string
+}
+
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function extractPresetQuestionExpectations(value: unknown): PresetQuestionExpectation[] {
+  if (!Array.isArray(value)) return []
+
+  const results: PresetQuestionExpectation[] = []
+  for (const item of value) {
+    if (!isRecord(item)) continue
+    const question = normalizeText(item.question)
+    const expectedAnswer = normalizeText(item.expected_answer)
+    if (!question || !expectedAnswer) continue
+    results.push({ question, expectedAnswer })
+  }
+
+  return results
+}
+
 function buildFallbackAnalysis(): AIAnalysis & { score: number } {
   return {
     dimension_scores: {
@@ -143,6 +174,7 @@ export async function processInterviewAnalyzeTask({
         title,
         description,
         requirements,
+        questions,
         companies (
           name,
           slug
@@ -176,9 +208,17 @@ export async function processInterviewAnalyzeTask({
 
   const transcript = parseTranscript(interviewData.transcript)
 
+  const presetQuestionExpectations = extractPresetQuestionExpectations(job.questions)
+
   const analysis = transcript.length === 0
     ? buildFallbackAnalysis()
-    : await analyzeInterview(job.description || '', job.requirements || '', transcript, locale)
+    : await analyzeInterview(
+      job.description || '',
+      job.requirements || '',
+      transcript,
+      locale,
+      presetQuestionExpectations
+    )
 
   const interviewUpdate = {
     status: 'completed',

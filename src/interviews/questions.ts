@@ -59,27 +59,17 @@ function extractPresetQuestions(value: unknown): string[] {
 
   if (Array.isArray(value)) {
     for (const item of value) {
-      if (typeof item === 'string') {
-        push(item)
-        continue
-      }
       if (!isRecord(item)) continue
 
       // Common shapes:
       // - { question: string }
-      // - { text: string }
-      // - { title: string, type?: 'question' }
       push(item.question)
-      push(item.text)
-      if (item.type === 'question') push(item.title)
     }
   } else if (isRecord(value)) {
     // e.g. { questions: [...] }
     if (Array.isArray(value.questions)) {
       results.push(...extractPresetQuestions(value.questions))
     }
-  } else if (typeof value === 'string') {
-    push(value)
   }
 
   const seen = new Set<string>()
@@ -142,7 +132,6 @@ function postProcessQuestionList(params: {
   }
 
   const presetKeySet = new Set(presetMap.keys())
-  const usedPresetKeys = new Set<string>()
 
   const seen = new Set<string>()
   const ordered: string[] = []
@@ -155,22 +144,16 @@ function postProcessQuestionList(params: {
     ordered.push(q)
   }
 
-  for (const q of generatedQuestions) {
-    const key = interviewQuestionKey(q)
-    if (!key) continue
-    const presetQuestion = presetMap.get(key)
-    if (presetQuestion) {
-      usedPresetKeys.add(key)
-      add(presetQuestion)
-      continue
-    }
-    add(q)
-  }
-
   for (const q of presetQuestions) {
     const key = interviewQuestionKey(q)
     if (!key) continue
-    if (usedPresetKeys.has(key)) continue
+    add(presetMap.get(key) || q)
+  }
+
+  for (const q of generatedQuestions) {
+    const key = interviewQuestionKey(q)
+    if (!key) continue
+    if (presetKeySet.has(key)) continue
     add(q)
   }
 

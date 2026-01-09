@@ -7,7 +7,8 @@ export async function analyzeInterview(
   jobDescription: string,
   jobRequirements: string,
   transcript: InterviewTranscriptData,
-  locale: string = 'en'
+  locale: string = 'en',
+  presetQuestionExpectations: Array<{ question: string; expectedAnswer: string }> = []
 ): Promise<AIAnalysis & { score: number }> {
   const normalizedLocale = normalizeLocale(locale)
   const i18n = INTERVIEW_ANALYSIS_I18N[normalizedLocale]
@@ -77,6 +78,17 @@ export async function analyzeInterview(
   const completionRateSection =
     completionRate === -1 ? '' : `\n${i18n.labels.completionRate}: ${(completionRate * 100).toFixed(1)}%`
 
+  const presetQuestionsSection = presetQuestionExpectations.length > 0
+    ? `\n${i18n.labels.presetQuestions}:\n${
+      presetQuestionExpectations
+        .map(
+          (item, index) =>
+            `${index + 1}. ${item.question}\n${i18n.labels.expectedAnswer}: ${item.expectedAnswer}`
+        )
+        .join('\n')
+    }\n\n${i18n.presetAnswerGuidelines}`
+    : ''
+
   const prompt = `You are an expert recruiter analyzing a ${interviewTypeLabel}. Based on the job requirements and the interview ${completionRate === -1 ? 'conversation' : 'transcript'}, provide a comprehensive and objective analysis.
 
 ${completionRate === -1 ? typeExplanation : ''}
@@ -94,6 +106,7 @@ ${jobRequirements}
 ${transcriptHeader}
 ${formattedTranscript}
 ${completionRateSection}
+${presetQuestionsSection}
 
 ${i18n.jsonInstruction}`
 
@@ -106,4 +119,3 @@ ${i18n.jsonInstruction}`
 
   return JSON.parse(response.output_text || '{}') as AIAnalysis & { score: number }
 }
-

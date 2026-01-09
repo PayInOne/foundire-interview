@@ -54,11 +54,7 @@ ${common.companyOverview}: ${trimmedCompanyDescription && trimmedCompanyDescript
   let presetSection = ''
   if (hasPresets) {
     const presetList = presetQuestions.map((question, i) => `${i + 1}. ${question}`).join('\n')
-    if (hasResume) {
-      presetSection = `\n${i18n.presetQuestionsNote(presetQuestions.length)}\n${presetList}\n\n${i18n.presetQuestionsInstruction(numberOfQuestions, numberOfQuestions + presetQuestions.length)}`
-    } else {
-      presetSection = `\n${i18n.avoidDuplicateNote}\n${presetList}\n\nPlease ensure your generated questions are clearly different from the above preset questions.`
-    }
+    presetSection = `\n${i18n.presetQuestionsNote(presetQuestions.length)}\n${presetList}\n\n${i18n.presetQuestionsInstruction(numberOfQuestions, numberOfQuestions + presetQuestions.length)}`
   } else {
     presetSection = `\n${i18n.generateCountNote(numberOfQuestions)}`
   }
@@ -101,4 +97,3 @@ ${i18n.jsonInstruction} ${languageInstruction}`
     hasPresetQuestions: presetQuestions.length > 0,
   }
 }
-

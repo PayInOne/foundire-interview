@@ -47,12 +47,12 @@ Rules:
     userPromptIntroWithoutResume: (jobTitle, count) =>
       `Generate ${count} interview questions for the position of ${jobTitle}.`,
     presetQuestionsNote: (count) =>
-      `IMPORTANT: The following ${count} preset interview questions MUST be included in your final question list:`,
+      `IMPORTANT: The following ${count} preset interview questions will be asked first:`,
     presetQuestionsInstruction: (newCount, totalCount) =>
-      `Generate ${newCount} new questions and mix them with the preset questions to form a logical interview flow. Return a total of ${totalCount} questions. Do NOT put all preset questions together; distribute them naturally.`,
+      `Generate ${newCount} NEW questions that will be asked after the preset questions. The full interview will have ${totalCount} questions. Do NOT repeat the preset questions.`,
     presetQuestionsOrdering: '',
     avoidDuplicateNote:
-      'IMPORTANT: The following are preset interview questions that will also be asked. Ensure your generated questions are distinct and do NOT overlap or duplicate them:',
+      'IMPORTANT: The following preset interview questions will be asked first. Do NOT repeat them in your output:',
     generateCountNote: (count) => `You need to generate ${count} new interview questions.`,
     questionGuidelinesWithResume: `Guidelines:
 1. Reference specific resume projects/skills and verify depth ("how", "why", "tradeoffs", "metrics").
@@ -94,12 +94,12 @@ Rules:
     userPromptIntroWithoutResume: (jobTitle, count) =>
       `请为“${jobTitle}”岗位生成 ${count} 个面试问题。`,
     presetQuestionsNote: (count) =>
-      `重要：以下 ${count} 个预设问题必须出现在你的最终问题列表中：`,
+      `重要：以下 ${count} 个预设问题会优先提问：`,
     presetQuestionsInstruction: (newCount, totalCount) =>
-      `请生成 ${newCount} 个新问题，并与预设问题“自然穿插”形成合理的面试流程。最终返回共 ${totalCount} 个问题。不要把预设问题全部堆在一起。`,
+      `请生成 ${newCount} 个新问题，安排在预设问题之后。总问题数为 ${totalCount}。不要重复预设问题。`,
     presetQuestionsOrdering: '',
     avoidDuplicateNote:
-      '重要：以下为预设问题（也会被问到）。你生成的新问题必须与其明显不同，避免重复或高度重合：',
+      '重要：以下预设问题会优先提问。请不要在输出中重复这些问题：',
     generateCountNote: (count) => `请生成 ${count} 个新面试问题。`,
     questionGuidelinesWithResume: `准则：
 1. 结合简历中的具体项目/经历追问细节（怎么做、为什么这么做、遇到什么问题、如何权衡、效果指标）。
@@ -140,12 +140,12 @@ Reglas:
     userPromptIntroWithoutResume: (jobTitle, count) =>
       `Genera ${count} preguntas de entrevista para el puesto de ${jobTitle}.`,
     presetQuestionsNote: (count) =>
-      `IMPORTANTE: Las siguientes ${count} preguntas predefinidas DEBEN incluirse en la lista final:`,
+      `IMPORTANTE: Las siguientes ${count} preguntas predefinidas se harán primero:`,
     presetQuestionsInstruction: (newCount, totalCount) =>
-      `Genera ${newCount} preguntas nuevas y mézclalas con las predefinidas para crear un flujo lógico. Devuelve un total de ${totalCount} preguntas. No agrupes todas las preguntas predefinidas juntas.`,
+      `Genera ${newCount} preguntas NUEVAS que se harán después de las predefinidas. La entrevista completa tendrá ${totalCount} preguntas. No repitas las preguntas predefinidas.`,
     presetQuestionsOrdering: '',
     avoidDuplicateNote:
-      'IMPORTANTE: Las siguientes son preguntas predefinidas (también se harán). Asegúrate de que tus preguntas nuevas sean distintas y no se dupliquen:',
+      'IMPORTANTE: Las siguientes preguntas predefinidas se harán primero. No las repitas en tu salida:',
     generateCountNote: (count) => `Necesitas generar ${count} preguntas nuevas de entrevista.`,
     questionGuidelinesWithResume: `Guías:
 1. Referencia proyectos/habilidades del currículum y valida profundidad ("cómo", "por qué", tradeoffs, métricas).
@@ -183,12 +183,12 @@ Règles :
     userPromptIntroWithoutResume: (jobTitle, count) =>
       `Générez ${count} questions d'entretien pour le poste de ${jobTitle}.`,
     presetQuestionsNote: (count) =>
-      `IMPORTANT : Les ${count} questions prédéfinies suivantes DOIVENT être incluses dans la liste finale :`,
+      `IMPORTANT : Les ${count} questions prédéfinies suivantes seront posées en premier :`,
     presetQuestionsInstruction: (newCount, totalCount) =>
-      `Générez ${newCount} nouvelles questions et mélangez-les avec les questions prédéfinies pour créer un flux logique. Retournez un total de ${totalCount} questions. Ne regroupez pas toutes les questions prédéfinies ensemble.`,
+      `Générez ${newCount} nouvelles questions qui seront posées après les questions prédéfinies. L'entretien complet comptera ${totalCount} questions. Ne répétez pas les questions prédéfinies.`,
     presetQuestionsOrdering: '',
     avoidDuplicateNote:
-      "IMPORTANT : Les questions suivantes sont prédéfinies (elles seront aussi posées). Assurez-vous que vos nouvelles questions sont différentes et ne les dupliquent pas :",
+      "IMPORTANT : Les questions prédéfinies suivantes seront posées en premier. Ne les répétez pas dans votre sortie :",
     generateCountNote: (count) => `Vous devez générer ${count} nouvelles questions d'entretien.`,
     questionGuidelinesWithResume: `Consignes :
 1. Référez-vous à des projets/compétences du CV et validez la profondeur ("comment", "pourquoi", compromis, métriques).
