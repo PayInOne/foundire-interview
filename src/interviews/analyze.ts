@@ -144,6 +144,14 @@ function buildFallbackAnalysis(): AIAnalysis & { score: number } {
   }
 }
 
+function calibrateInterviewScore(rawScore: number): number {
+  if (!Number.isFinite(rawScore)) return 0
+  const clamped = Math.max(0, Math.min(100, rawScore))
+  if (clamped <= 5) return Math.round(clamped)
+  const boosted = clamped * 1.12 + 6
+  return Math.max(0, Math.min(100, Math.round(boosted)))
+}
+
 export async function processInterviewAnalyzeTask({
   interviewId,
   locale = 'en',
@@ -220,10 +228,18 @@ export async function processInterviewAnalyzeTask({
       presetQuestionExpectations
     )
 
+  const rawScore = typeof analysis.score === 'number' ? analysis.score : 0
+  const calibratedScore = calibrateInterviewScore(rawScore)
+  const analysisPayload = {
+    ...analysis,
+    raw_score: rawScore,
+    score: calibratedScore,
+  }
+
   const interviewUpdate = {
     status: 'completed',
-    score: analysis.score,
-    ai_analysis: toJson(analysis),
+    score: calibratedScore,
+    ai_analysis: toJson(analysisPayload),
     ...(interviewData.completed_at ? {} : { completed_at: new Date().toISOString() }),
   }
 
