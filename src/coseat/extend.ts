@@ -5,7 +5,7 @@ import {
   MAX_INTERVIEW_DURATION_MINUTES,
   normalizeInterviewDurationMinutes,
 } from '../interviews/constants'
-import { asRecord, getString, getNumber } from '../utils/parse'
+import { asRecord, getString } from '../utils/parse'
 
 export type CoseatExtendResponse =
   | {
@@ -55,7 +55,7 @@ export async function handleExtendCoseatInterview(
       return { status: 401, body: { error: 'Unauthorized' } }
     }
 
-    const minutes = getNumber(record, 'minutes') ?? EXTEND_INTERVIEW_CONFIG.MINUTES_PER_EXTENSION
+    const minutes = EXTEND_INTERVIEW_CONFIG.MINUTES_PER_EXTENSION
     const adminSupabase = createAdminClient()
 
     const { data: coseatInterview, error: fetchError } = await adminSupabase
