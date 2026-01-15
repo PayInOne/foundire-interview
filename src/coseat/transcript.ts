@@ -66,6 +66,7 @@ export async function handlePostCoseatTranscript(
       .select('id')
       .eq('company_id', meta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {
@@ -150,6 +151,7 @@ export async function handleGetCoseatTranscript(
       .select('id')
       .eq('company_id', meta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {

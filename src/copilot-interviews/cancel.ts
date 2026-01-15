@@ -86,6 +86,7 @@ export async function handleCancelCopilotInterview(
         .select('id')
         .eq('company_id', interview.company_id)
         .eq('user_id', userId)
+        .is('deleted_at', null)
         .single()
 
       if (!isMember) {

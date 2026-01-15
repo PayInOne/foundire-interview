@@ -39,6 +39,7 @@ export async function handleToggleCopilotAi(
       .select('id')
       .eq('company_id', companyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!isMember) {
@@ -61,4 +62,3 @@ export async function handleToggleCopilotAi(
     return { status: 500, body: { error: 'Internal server error' } }
   }
 }
-

@@ -82,6 +82,7 @@ export async function handleExtendCopilotInterview(
       .select('id')
       .eq('company_id', meta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .maybeSingle()
 
     if (!participant && !isMember) {

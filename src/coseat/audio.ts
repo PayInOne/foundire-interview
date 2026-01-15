@@ -44,6 +44,7 @@ export async function handleGetCoseatAudio(
       .select('id')
       .eq('user_id', userId)
       .eq('company_id', record.company_id)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {
@@ -82,4 +83,3 @@ export async function handleGetCoseatAudio(
     return { status: 500, headers, body: { error: 'Failed to stream audio' } }
   }
 }
-
