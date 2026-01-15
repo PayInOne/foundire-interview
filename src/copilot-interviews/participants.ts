@@ -60,6 +60,7 @@ export async function handleAddCopilotParticipants(
       .select('id')
       .eq('company_id', interviewMeta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!userMember) {
@@ -82,6 +83,7 @@ export async function handleAddCopilotParticipants(
       .from('company_members')
       .select('user_id')
       .eq('company_id', interviewMeta.company_id)
+      .is('deleted_at', null)
       .in('user_id', interviewerIds)
 
     const validUserIds = new Set((validMembers || []).map((m) => (m as { user_id: string }).user_id))
@@ -212,6 +214,7 @@ export async function handleGetCopilotParticipants(
       .select('id')
       .eq('company_id', companyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!userMember) {

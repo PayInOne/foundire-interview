@@ -42,6 +42,7 @@ export async function handleCancelCoseatInterview(
       .select('id')
       .eq('company_id', meta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!isMember) {

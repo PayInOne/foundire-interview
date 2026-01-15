@@ -82,6 +82,7 @@ export async function handleCreateCopilotInterview(body: unknown): Promise<Copil
       .select('company_id')
       .eq('company_id', companyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {

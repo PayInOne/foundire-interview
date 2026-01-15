@@ -73,6 +73,7 @@ export async function handlePostCopilotTranscript(
       .select('id')
       .eq('company_id', interviewMeta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {
@@ -147,6 +148,7 @@ export async function handleGetCopilotTranscript(
       .select('id')
       .eq('company_id', interviewMeta.company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {

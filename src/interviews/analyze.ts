@@ -331,6 +331,7 @@ export async function processInterviewAnalyzeTask({
         .from('company_members')
         .select('user_id, notification_preferences')
         .eq('company_id', interviewData.company_id)
+        .is('deleted_at', null)
 
       if (membersError) {
         console.error('Failed to load company members:', membersError)

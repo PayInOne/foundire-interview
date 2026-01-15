@@ -166,6 +166,7 @@ export async function handleRescheduleCopilotInterview(body: unknown): Promise<C
       .select('id')
       .eq('company_id', (target as { company_id: string }).company_id)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!isMember) {

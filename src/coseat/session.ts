@@ -71,6 +71,7 @@ export async function handleStartCoseatSession(body: unknown): Promise<CoseatSes
       .select('id')
       .eq('company_id', companyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {
