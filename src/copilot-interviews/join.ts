@@ -147,6 +147,7 @@ export async function handleJoinCopilotInterview(
           .select('id')
           .eq('company_id', copilotInterview.company_id)
           .eq('user_id', userId)
+          .is('deleted_at', null)
           .single()
 
         if (!isMember) {

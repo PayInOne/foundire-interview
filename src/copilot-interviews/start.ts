@@ -31,6 +31,7 @@ export async function handleStartCopilotInterview(copilotInterviewId: string, bo
       .select('id')
       .eq('company_id', companyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!isMember) {

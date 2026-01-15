@@ -65,6 +65,7 @@ export async function handleScheduleCoseatInterview(body: unknown): Promise<Cose
       .select('id')
       .eq('company_id', candidateCompanyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {
@@ -202,6 +203,7 @@ export async function handleGetActiveCoseatInterview(
       .select('id')
       .eq('company_id', candidateCompanyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!membership) {

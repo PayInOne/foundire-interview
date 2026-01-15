@@ -224,6 +224,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
       .select('id')
       .eq('company_id', companyId)
       .eq('user_id', userId)
+      .is('deleted_at', null)
       .single()
 
     if (!isMember) {
@@ -356,6 +357,7 @@ export async function handleScheduleCopilotInterview(body: unknown): Promise<Cop
         .from('company_members')
         .select('user_id')
         .eq('company_id', companyId)
+        .is('deleted_at', null)
         .in('user_id', interviewerIds)
 
       const memberUserIds = new Set((members || []).map((m) => (m as { user_id: string }).user_id))
